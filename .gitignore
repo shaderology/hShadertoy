@@ -1,0 +1,20 @@
+# Ignore everything by default
+*
+
+!.gitignore
+
+# Allow these top-level folders
+!src/
+!tests/
+!houdini/
+
+# Allow root README
+!README.md
+
+# Ignore Python cache dirs inside allowed folders
+src/**/__pycache__/
+tests/**/__pycache__/
+houdini/**/__pycache__/
+
+# Ignore Houdini backup files
+houdini/**/backup/
