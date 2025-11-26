@@ -4,26 +4,26 @@
 
 1. Download and unpack hShadertoy to a local directory (eg: `C:/dev/hShadertoy` )
 
-2. **Install tree-sitter**
-`pip install tree-sitter`
+2. **Install tree-sitter:**
+> `pip install tree-sitter`
 
-3. **Install tree-sitter-glsl**
-`pip install tree-sitter-glsl`
+3. **Install tree-sitter-glsl:**
+> `pip install tree-sitter-glsl`
 
-4. Copy `houdini/packages/hShadertoy.json` to your package directory (eg $HOUDINI_USER_PREF_DIR/packages )
+4. Copy `houdini/packages/hShadertoy.json` to your package directory (eg `$HOUDINI_USER_PREF_DIR/packages` )
 
-5. Edit `hShadertoy.json` and set the following env variables:
+5. Edit `hShadertoy.json` and set the following 3 env variables:
 
 ```
-    { "HSHADERTOY_ROOT": "C:/dev/hShadertoy" },
-    { "HSHADERTOY_HOUDINI": "C:/dev/hShadertoy/houdini" },
-    { "SHADERTOY_API_KEY": "YOUR_API_KEY"},
+{ "HSHADERTOY_ROOT": "C:/dev/hShadertoy" },
+{ "HSHADERTOY_HOUDINI": "C:/dev/hShadertoy/houdini" },
+{ "SHADERTOY_API_KEY": "YOUR_API_KEY"},
 ```
 Get your API key: https://www.shadertoy.com/howto
 
-**Note:** Shadertoy API is corrently blocked. API keys do not work.
+**Note:** Shadertoy API is corrently blocked. Importing shaderts using API not working
 
-6. Open Editor in hShadertoy shelf
+6. Open **Editor** in hShadertoy shelf
 
 ### Known limitations
 - Shadertoy global uniforms (iChannel#, iTime.. ) used outside mainImage() will be transpiled as undefined variables and produce incomplete shader
@@ -73,9 +73,7 @@ pyopencl>=2025.2
 
 
 ## Known BUGS
-- undefined variables (glsl undefined variables get 0 assigned, opencl stays undefined)
 - matrix operations not fully covered
-- and lots others
 - all matrix functions and operations are still in dev and prone to fail.
 - void() functions still need polishing (foo.x needs to become foo[0] etc)
 
@@ -89,11 +87,11 @@ pyopencl>=2025.2
 - texture() functions and helper runtime update (volumes, sound etc)
 
 ### Builder
-- fix video/volume parameter mismatch
+- fix video/volume parameter mapping mismatch
 
 ### HDA
-- Optimize. currently evaluates the full graph even if buffer shaders are not used.
-- Pack remaining cubemaps
-- Pack volumes
+- Optimize! currently evaluates the full graph even if buffer shaders are not used. Just needs simple switch.
+- Pack remaining cubemaps (use included HDA hShadertoy::cubemappack)
+- Pack volumes. Similar packing to cubemaps, pack z slices into 2D image grid layout.
 
 

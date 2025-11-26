@@ -187,6 +187,9 @@ class ASTTransformer:
             'else_clause': self._transform_else_clause,
             'for_statement': self._transform_for_statement,
             'while_statement': self._transform_while_statement,
+            'do_statement': self._transform_do_statement,
+            'break_statement': self._transform_break_statement,
+            'continue_statement': self._transform_continue_statement,
             'compound_statement': self._transform_compound_statement,
             'binary_expression': self._transform_binary_expression,
             'unary_expression': self._transform_unary_expression,
@@ -1410,14 +1413,22 @@ class ASTTransformer:
         """
         Transform expression statement (expr;).
 
-        Returns either IR.ExpressionStatement or IR.CompoundStatement if
-        mat3 function calls need to be lifted.
+        Special handling for GLSL 'discard' statement which becomes 'return;'.
         """
         expr_node = node.named_children[0] if node.named_children else None
         if expr_node is None:
             raise TransformationError(
                 "Empty expression statement",
                 node.start_point
+            )
+
+        # Check for GLSL 'discard' statement -> transform to 'return;'
+        # In GLSL fragment shaders, 'discard' terminates fragment processing
+        # In OpenCL, we use 'return;' to exit the kernel function early
+        if expr_node.type == 'identifier' and expr_node.text == 'discard':
+            return IR.ReturnStatement(
+                value=None,
+                source_location=node.start_point
             )
 
         # Transform the expression
@@ -1694,6 +1705,52 @@ class ASTTransformer:
         return IR.WhileStatement(
             condition=condition,
             body=body,
+            source_location=node.start_point
+        )
+
+    def _transform_do_statement(self, node: ASTNode) -> IR.DoWhileStatement:
+        """
+        Transform do-while loop.
+
+        Syntax: do { body } while (condition);
+        """
+        body_node = node.child_by_field_name('body')
+        condition_node = node.child_by_field_name('condition')
+
+        if not body_node or not condition_node:
+            raise TransformationError(
+                "Invalid do-while statement structure",
+                node.start_point
+            )
+
+        body = self._transform_node(body_node)
+        condition = self._transform_node(condition_node)
+        # Unwrap one level of parentheses since while syntax already requires them
+        condition = self._unwrap_syntax_parens(condition)
+
+        return IR.DoWhileStatement(
+            body=body,
+            condition=condition,
+            source_location=node.start_point
+        )
+
+    def _transform_break_statement(self, node: ASTNode) -> IR.BreakStatement:
+        """
+        Transform break statement.
+
+        Break exits the innermost enclosing loop (for/while/do-while).
+        """
+        return IR.BreakStatement(
+            source_location=node.start_point
+        )
+
+    def _transform_continue_statement(self, node: ASTNode) -> IR.ContinueStatement:
+        """
+        Transform continue statement.
+
+        Continue skips to the next iteration of the innermost enclosing loop.
+        """
+        return IR.ContinueStatement(
             source_location=node.start_point
         )
 

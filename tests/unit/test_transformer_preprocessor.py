@@ -336,6 +336,93 @@ def test_elif_pass_through(transformer):
 
 
 # ============================================================================
+# Vector Constructor Transformation (10 tests)
+# ============================================================================
+
+def test_vec2_constructor_in_define(transformer):
+    """Test vec2 constructor in #define macro."""
+    source = "#define DIR vec2(1.0, 0.0)"
+    result = transformer.transform(source)
+    assert result == "#define DIR (float2)(1.0f, 0.0f)"
+
+
+def test_vec3_constructor_in_define(transformer):
+    """Test vec3 constructor in #define macro."""
+    source = "#define UP vec3(0, 1, 0)"
+    result = transformer.transform(source)
+    assert "(float3)(0, 1, 0)" in result
+
+
+def test_vec4_constructor_in_define(transformer):
+    """Test vec4 constructor in #define macro."""
+    source = "#define COLOR vec4(1.0, 0.5, 0.0, 1.0)"
+    result = transformer.transform(source)
+    assert "(float4)(1.0f, 0.5f, 0.0f, 1.0f)" in result
+
+
+def test_ivec2_constructor_in_define(transformer):
+    """Test ivec2 constructor in #define macro."""
+    source = "#define SIZE ivec2(800, 600)"
+    result = transformer.transform(source)
+    assert "(int2)(800, 600)" in result
+
+
+def test_multiple_vector_constructors_in_define(transformer):
+    """Test multiple vector constructors in one macro."""
+    source = "#define BLEND(a,b,t) mix(vec2(a), vec2(b), t)"
+    result = transformer.transform(source)
+    assert "(float2)(a)" in result
+    assert "(float2)(b)" in result
+    assert "GLSL_mix" in result
+
+
+def test_nested_vector_constructor_in_define(transformer):
+    """Test nested vector constructor with float literal."""
+    source = "#define HALF vec2(0.5)"
+    result = transformer.transform(source)
+    assert "(float2)(0.5f)" in result
+
+
+def test_vec2_constructor_in_ifdef_block(transformer):
+    """Test vec2 constructor inside #ifdef block."""
+    source = """#ifdef FOO
+    vec2 bar = vec2(0.);
+#endif"""
+    result = transformer.transform(source)
+    assert "(float2)(0.f)" in result
+    assert "#ifdef FOO" in result
+    assert "#endif" in result
+
+
+def test_vec3_constructor_in_else_block(transformer):
+    """Test vec3 constructor inside #else block."""
+    source = """#ifdef FOO
+    vec2 a = vec2(1.0);
+#else
+    vec3 b = vec3(0.0);
+#endif"""
+    result = transformer.transform(source)
+    assert "(float2)(1.0f)" in result
+    assert "(float3)(0.0f)" in result
+
+
+def test_vec_constructor_with_function_call(transformer):
+    """Test vector constructor with GLSL function inside."""
+    source = "#define CALC vec2(sin(x), cos(y))"
+    result = transformer.transform(source)
+    assert "(float2)(GLSL_sin(x), GLSL_cos(y))" in result
+
+
+def test_vector_constructor_no_double_transform(transformer):
+    """Test that already transformed constructors are not double-transformed."""
+    source = "#define DIR (float2)(1.0f, 0.0f)"
+    result = transformer.transform(source)
+    # Should not double-transform
+    assert "((float2))" not in result
+    assert "(float2)(1.0f, 0.0f)" in result
+
+
+# ============================================================================
 # Integration Tests (covers remaining scenarios)
 # ============================================================================
 

@@ -565,6 +565,52 @@ class OpenCLEmitter:
 
         return result
 
+    def emit_DoWhileStatement(self, node: IR.DoWhileStatement) -> str:
+        """
+        Emit do-while loop.
+
+        Args:
+            node: DoWhileStatement node
+
+        Returns:
+            Complete do-while loop
+        """
+        result = f"{self.indent()}do "
+
+        # Body
+        body_code = self.emit(node.body)
+        result += body_code
+
+        # Condition
+        condition = self.emit(node.condition)
+        result += f" while ({condition});\n"
+
+        return result
+
+    def emit_BreakStatement(self, node: IR.BreakStatement) -> str:
+        """
+        Emit break statement.
+
+        Args:
+            node: BreakStatement node
+
+        Returns:
+            Break statement with semicolon and newline
+        """
+        return f"{self.indent()}break;\n"
+
+    def emit_ContinueStatement(self, node: IR.ContinueStatement) -> str:
+        """
+        Emit continue statement.
+
+        Args:
+            node: ContinueStatement node
+
+        Returns:
+            Continue statement with semicolon and newline
+        """
+        return f"{self.indent()}continue;\n"
+
     def emit_CompoundStatement(self, node: IR.CompoundStatement) -> str:
         """
         Emit compound statement (block).

@@ -381,6 +381,40 @@ class WhileStatement(TransformedNode):
 
 
 @dataclass(frozen=True)
+class DoWhileStatement(TransformedNode):
+    """
+    Do-while loop.
+
+    Examples:
+        do { ... } while (condition);
+    """
+    body: 'CompoundStatement' = None
+    condition: TransformedNode = None
+
+
+@dataclass(frozen=True)
+class BreakStatement(TransformedNode):
+    """
+    Break statement (exit loop early).
+
+    Examples:
+        break;
+    """
+    pass
+
+
+@dataclass(frozen=True)
+class ContinueStatement(TransformedNode):
+    """
+    Continue statement (skip to next loop iteration).
+
+    Examples:
+        continue;
+    """
+    pass
+
+
+@dataclass(frozen=True)
 class CompoundStatement(TransformedNode):
     """
     Block of statements.
