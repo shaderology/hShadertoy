@@ -1,34 +1,56 @@
-# hShadertoy 
+# hShadertoy
+
+**Experimental Shadertoy.com importer for Houdini 21 Copernicus**
+
+https://youtu.be/ULpn8tGFsRI
+
+## Project Overview
+
+"You know what would be cool, if you could import a Shadertoy shader to Houdini COPs, do you think it's possible?"
+
+1. **Editor** Shadertoy Mini IDE. input/output shadertoyAPI JSON.
+2. **Builder** Sets hShadertoy HDA parameters and uses the transpiler to set OpenCL code.
+3. **Transpiler** Translates GLSL to OpenCL - madness! never been done!
+
+## Shadertoy features implementation in Houdini Digital Asset (HDA)
+
+- GLSL fragment shaders by OpenCL nodes
+- Buffer shaders by Block Begin/Block End
+- Cubemaps and Volumes packed and unpacked to 2D image maps
+- iMouse by hou.ViewerState or CHOPs Mouse or SOP Draw curves (todo)
+- Webcam by Live Video Copernicus node (todo)
+- Audio by CHOP Audio in (todo)
+
 
 ## Installation
 
-1. Download and unpack hShadertoy to a local directory (eg: `C:/dev/hShadertoy` )
+1. [**Download**](https://github.com/shaderology/hShadertoy) and unpack hShadertoy to a local directory (eg: `C:/dev/hShadertoy` )
 
 2. **Install tree-sitter:**
-> `pip install tree-sitter`
+    > `pip install tree-sitter`
 
 3. **Install tree-sitter-glsl:**
-> `pip install tree-sitter-glsl`
+    > `pip install tree-sitter-glsl`
 
-4. Copy `houdini/packages/hShadertoy.json` to your package directory (eg `$HOUDINI_USER_PREF_DIR/packages` )
+4. **Copy** `houdini/packages/hShadertoy.json` to your package directory (eg `$HOUDINI_USER_PREF_DIR/packages` )
 
-5. Edit `hShadertoy.json` and set the following 3 env variables:
+5. **Configure** `hShadertoy.json` and set the following 3 env variables:
 
-```
-{ "HSHADERTOY_ROOT": "C:/dev/hShadertoy" },
-{ "HSHADERTOY_HOUDINI": "C:/dev/hShadertoy/houdini" },
-{ "SHADERTOY_API_KEY": "YOUR_API_KEY"},
-```
-Get your API key: https://www.shadertoy.com/howto
+    ```
+    { "HSHADERTOY_ROOT": "C:/dev/hShadertoy" },
+    { "HSHADERTOY_HOUDINI": "C:/dev/hShadertoy/houdini" },
+    { "SHADERTOY_API_KEY": "YOUR_API_KEY"},
+    ```
+    Get your API key: https://www.shadertoy.com/howto
 
-**Note:** Shadertoy API is corrently blocked. Importing shaderts using API not working
+    **Note:** Shadertoy API is currently blocked. Importing shaderts using API is not working.
 
 6. Open **Editor** in hShadertoy shelf
 
 ### Known limitations
 - Shadertoy global uniforms (iChannel#, iTime.. ) used outside mainImage() will be transpiled as undefined variables and produce incomplete shader
 - dFdx(), dFdy() and fwidth() are just passthrough functions. (not supported in OpenCL)
-- Expected **fragColor** and **fragCoord** in mainImage(). Custom names will fail. This will be fixed at some point in future. Prob simple RegEx parsing in transpile_glsl.py
+- **fragColor** and **fragCoord** are expected in mainImage(). Custom names will fail. This will be fixed at some point in near future. Prob needs a simple RegEx parsing in transpile_glsl.py
 
 ## Development
 
@@ -54,7 +76,7 @@ pyopencl>=2025.2
 7. `magic!`
 
 ### GLSL to OpenCL specification:
-- `src/glsl_to_opencl/GLSL_TO_OPENCL_SPEC.md`
+- [src/glsl_to_opencl/GLSL_TO_OPENCL_SPEC.md](src/glsl_to_opencl/GLSL_TO_OPENCL_SPEC.md)
 
 ### Unit Tests
 - Location: `tests/unit/`
