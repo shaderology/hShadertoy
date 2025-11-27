@@ -713,7 +713,7 @@ typedef struct {
     Point start, end;
 } Line;
 
-Line l = {{0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
+Line l = { {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f} };
 ```
 
 ### 8. Function Parameters
