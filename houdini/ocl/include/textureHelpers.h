@@ -2,10 +2,9 @@
 float4 sampler2D(const IMX_Layer* layer, float2 uv)
 {
     // Convert normalized UV (texture space) to buffer space:
-    //float2 xy = textureToBuffer(layer->stat, uv);
-    int2 ixy = convert_int2_sat_rtn(textureToBuffer(layer->stat, uv) + 0.5f);
+    float2 xy = textureToBuffer(layer->stat, uv) + 0.5f;
     // Use the layer’s own sampler state:
-    return bufferIndexF4(layer, ixy,
+    return bufferSampleF4(layer, xy,
                           layer->stat->border,
                           layer->stat->storage,
                           layer->stat->channels);
@@ -120,7 +119,7 @@ float4 __attribute__((overloadable)) texelFetch(const IMX_Layer* layer, int2 coo
 {
     // lod parameter ignored (no mipmaps)
     return bufferIndexF4(layer, coord,
-                          layer->stat->border,
+                          0,
                           layer->stat->storage,
                           layer->stat->channels);
 }
