@@ -48,7 +48,7 @@ https://youtu.be/ULpn8tGFsRI
 6. Open **Editor** in hShadertoy shelf
 
 ### Known limitations
-- Shadertoy global uniforms (iChannel#, iTime.. ) used outside mainImage() will be transpiled as undefined variables and produce incomplete shader
+- Shadertoy global uniform iTime used outside mainImage() will be transpiled as constant
 - dFdx(), dFdy() and fwidth() are just passthrough functions. (not supported in OpenCL)
 - **fragColor** and **fragCoord** are expected in mainImage(). Custom names will fail. This will be fixed at some point in near future. Prob needs a simple RegEx parsing in transpile_glsl.py
 

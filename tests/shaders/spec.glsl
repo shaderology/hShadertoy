@@ -47,9 +47,10 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float c1 = float(1); // float to int
     int c2 = int(1.0);
     vec4 c3 = vec4(1.0); // float to vec4
-    vec4 c4 = vec4( vec2(0), vec2(1.));
-    mat3 c5 = mat3( vec3(0), vec3(0), vec3(0));
-    mat4 c6 = mat4(0.0);
+    ivec4 c4 = ivec4(c3);
+    vec4 c5 = vec4( vec2(0), vec2(1.));
+    mat3 c6 = mat3( vec3(0), vec3(0), vec3(0));
+    mat4 c7 = mat4(0.0);
     
     // vector component swizzle
     vec3 z1 = vec3(1,2,3).xxz;
