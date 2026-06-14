@@ -11,6 +11,7 @@
 # Allow root README
 !README.md
 !pytest.ini
+!requirements.txt
 
 # Ignore Python cache dirs inside allowed folders
 src/**/__pycache__/
