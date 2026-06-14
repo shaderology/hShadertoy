@@ -4,9 +4,18 @@ For more info about the Shadertoy API, refer to shadertoy.com/howto
 Note: only shaders listed as Public+API are available through the Shadertoy API.
 """
 
-import requests
 from io import BytesIO
 import json
+
+# shadertoy.com sits behind Cloudflare bot protection that blocks clients by
+# TLS fingerprint, so plain `requests` gets a 403 regardless of headers.
+# curl_cffi impersonates a real Chrome handshake and passes without cookies.
+try:
+    from curl_cffi import requests
+    _request_kwargs = {"impersonate": "chrome"}
+except ImportError:
+    import requests
+    _request_kwargs = {}
 
 base_url = "https://www.shadertoy.com"
 api_base_url = base_url + "/api/v1/shaders"
@@ -23,14 +32,33 @@ class App(object):
     """ A class for accessing the Shadertoy API. """
     def __init__(self, key, user_agent="python-application"):
         self.key = key
-        self.headers = {"User-Agent": user_agent}
+        # When impersonating Chrome, the User-Agent must stay consistent with
+        # the TLS fingerprint or Cloudflare rejects the request anyway.
+        self.headers = {} if _request_kwargs else {"User-Agent": user_agent}
         super().__init__()
 
     def _get_json(self, url):
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, **_request_kwargs)
+        if response.status_code != 200:
+            if response.status_code == 403 and not _request_kwargs:
+                raise ShadertoyAPIError(
+                    "Blocked by Cloudflare bot protection (HTTP 403). "
+                    "Install the 'curl_cffi' package into Houdini's Python to fix this, "
+                    "or import the shader from a JSON file instead."
+                )
+            raise ShadertoyAPIError(f"Shadertoy API request failed (HTTP {response.status_code})")
+
         parsed_json = json.loads(response.content.decode("utf-8"))
         if "Error" in parsed_json: # The Shadertoy API returned an error message
-            raise ShadertoyAPIError(parsed_json["Error"]) # Show the error message
+            error = parsed_json["Error"]
+            # "Shader not found" is also returned when a shader exists but the author
+            # didn't publish it as "Public + API", which is easy to misdiagnose.
+            if "not found" in error.lower():
+                error = (
+                    "Shader not found, or not published with 'Public + API' access. "
+                    "Open it on shadertoy.com and check the shader's visibility setting."
+                )
+            raise ShadertoyAPIError(error) # Show the error message
 
         else:
             return parsed_json
@@ -42,9 +70,9 @@ class App(object):
         """
 
         url = base_url + path
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, **_request_kwargs)
         if response.status_code != 200: # Did not get the desired response, probably 404 file not found
-            raise requests.HTTPError(response.status_code) # Show the status code
+            raise ShadertoyAPIError(f"Failed to download media file {path} (HTTP {response.status_code})")
 
         else:
             return BytesIO(response.content) # Return a file-like object for accessing the media file
@@ -56,9 +84,9 @@ class App(object):
         """
 
         url = base_url + "/media/shaders/" + shader_id + ".jpg"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, **_request_kwargs)
         if response.status_code != 200: # Did not get the desired response, probably 404 file not found
-            raise requests.HTTPError(response.status_code) # Show the status code
+            raise ShadertoyAPIError(f"Failed to download icon for shader {shader_id} (HTTP {response.status_code})")
 
         else:
             return BytesIO(response.content) # Return a file-like object for accessing the image file

@@ -11,11 +11,19 @@ from PySide6 import QtWidgets, QtCore
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
                                QPushButton, QLabel, QTabWidget, QPlainTextEdit,
                                QComboBox, QMessageBox, QDialog, QMenu, QFileDialog,
-                               QToolButton, QCheckBox)
-from PySide6.QtGui import QFont
+                               QToolButton, QCheckBox, QGridLayout, QScrollArea)
+from PySide6.QtGui import (QFont, QIcon, QPixmap, QColor,
+                           QSyntaxHighlighter, QTextCharFormat)
+from PySide6.QtCore import QSize, QRegularExpression
 
 from hshadertoy.api.shadertoy import App
 from hshadertoy.builder import build_shadertoy_hda
+
+# Tab order matching the web asset browser
+FOLDER_ORDER = ["Misc", "Textures", "Cubemaps", "Volumes", "Videos", "Music"]
+
+# media.json "file" stems whose actual file in pic/named and pic/thumbs differs
+THUMB_FIXUPS = {"font_1": "font"}
 
 # Media library path
 def get_media_json_path():
@@ -26,71 +34,317 @@ def get_media_json_path():
         if os.path.exists(path):
             return path
 
-class ChannelSelector(QComboBox):
-    """Dropdown for selecting texture channels (iChannel0-3)"""
+
+def load_media_library():
+    """Load media library from JSON"""
+    MEDIA_JSON_PATH = os.environ.get('MEDIA_JSON_PATH') or get_media_json_path()
+    if not MEDIA_JSON_PATH or not os.path.exists(MEDIA_JSON_PATH):
+        print(f"Warning: Could not find media.json at {MEDIA_JSON_PATH}")
+        return []
+
+    try:
+        with open(MEDIA_JSON_PATH, 'r') as f:
+            return json.load(f).get('inputs', [])
+    except Exception as e:
+        print(f"Warning: Could not load media library: {e}")
+        return []
+
+
+def get_thumbnail_path(item):
+    """Get thumbnail PNG path in pic/thumbs for a media library item"""
+    media_json_path = os.environ.get('MEDIA_JSON_PATH') or get_media_json_path()
+    if not media_json_path:
+        return None
+
+    stem = os.path.splitext(item.get('file', ''))[0]
+    stem = THUMB_FIXUPS.get(stem, stem)
+    path = os.path.join(os.path.dirname(media_json_path), 'thumbs', stem + '.png')
+    return path if os.path.exists(path) else None
+
+
+def get_asset_label(item):
+    """Get display label for a media library item"""
+    return item.get('hda', {}).get('asset', {}).get('label', 'Unknown')
+
+
+def _make_format(color, bold=False):
+    """Build a QTextCharFormat from a hex color string."""
+    fmt = QTextCharFormat()
+    fmt.setForeground(QColor(color))
+    if bold:
+        fmt.setFontWeight(QFont.Bold)
+    return fmt
+
+
+class GLSLHighlighter(QSyntaxHighlighter):
+    """GLSL syntax highlighting matching the Shadertoy web IDE (CodeMirror cm-s-default) palette."""
+
+    # Control-flow and qualifier keywords  (CodeMirror cm-keyword #689)
+    KEYWORDS = (
+        "if else for while do return break continue discard switch case default "
+        "struct const uniform varying attribute in out inout layout precision "
+        "highp mediump lowp flat smooth noperspective centroid invariant precise "
+        "coherent volatile restrict readonly writeonly buffer shared subroutine"
+    ).split()
+
+    # Built-in types  (cm-type #085)
+    TYPES = (
+        "void bool int uint float double "
+        "vec2 vec3 vec4 bvec2 bvec3 bvec4 ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 "
+        "dvec2 dvec3 dvec4 "
+        "mat2 mat3 mat4 mat2x2 mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4 "
+        "dmat2 dmat3 dmat4 "
+        "sampler1D sampler2D sampler3D samplerCube "
+        "sampler1DArray sampler2DArray samplerCubeArray "
+        "sampler1DShadow sampler2DShadow samplerCubeShadow sampler2DArrayShadow "
+        "samplerCubeArrayShadow sampler2DRect sampler2DRectShadow samplerBuffer "
+        "sampler2DMS sampler2DMSArray "
+        "isampler1D isampler2D isampler3D isamplerCube isampler2DArray "
+        "usampler1D usampler2D usampler3D usamplerCube usampler2DArray "
+        "image2D image3D imageCube atomic_uint"
+    ).split()
+
+    # Atoms / boolean literals  (cm-atom #219)
+    ATOMS = "true false".split()
+
+    # Built-in functions + Shadertoy uniforms  (cm-builtin #68a)
+    BUILTINS = (
+        "radians degrees sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh "
+        "pow exp log exp2 log2 sqrt inversesqrt "
+        "abs sign floor trunc round roundEven ceil fract mod modf "
+        "min max clamp mix step smoothstep "
+        "length distance dot cross normalize faceforward reflect refract "
+        "matrixCompMult outerProduct transpose determinant inverse "
+        "lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual any all not "
+        "texture textureProj textureLod textureOffset texelFetch texelFetchOffset "
+        "textureProjOffset textureLodOffset textureProjLod textureProjLodOffset "
+        "textureGrad textureGradOffset textureProjGrad textureProjGradOffset "
+        "textureSize textureQueryLod textureQueryLevels textureSamples "
+        "texture2D texture2DLod texture2DProj textureCube textureCubeLod "
+        "dFdx dFdy dFdxFine dFdyFine dFdxCoarse dFdyCoarse fwidth "
+        "isnan isinf floatBitsToInt floatBitsToUint intBitsToFloat uintBitsToFloat "
+        "packSnorm2x16 unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 "
+        "packHalf2x16 unpackHalf2x16 EmitVertex EndPrimitive barrier "
+        # Shadertoy uniforms / GL builtins
+        "iResolution iTime iTimeDelta iFrame iFrameRate iChannelTime iChannelResolution "
+        "iMouse iChannel0 iChannel1 iChannel2 iChannel3 iDate iSampleRate "
+        "gl_FragCoord gl_FragColor gl_Position gl_PointSize gl_PointCoord "
+        "gl_VertexID gl_InstanceID gl_FragDepth gl_FrontFacing"
+    ).split()
+
+    def __init__(self, document):
+        super().__init__(document)
+
+        self.comment_format = _make_format("#779944")  # cm-comment #794
+
+        def word_rule(words, fmt):
+            pattern = r"\b(?:" + "|".join(words) + r")\b"
+            return (QRegularExpression(pattern), fmt)
+
+        # Applied in order; later rules override earlier ones on overlap,
+        # so strings/comments (last) win over code tokens beneath them.
+        self.rules = [
+            # numbers: decimal/float (with exponent + f/u/l suffixes) and hex
+            (QRegularExpression(r"\b0[xX][0-9a-fA-F]+[uUlL]*\b"), _make_format("#996688")),
+            (QRegularExpression(r"\b\d+\.?\d*(?:[eE][+-]?\d+)?[fFuUlL]*\b"), _make_format("#996688")),
+            (QRegularExpression(r"\.\d+(?:[eE][+-]?\d+)?[fF]?"), _make_format("#996688")),
+            word_rule(self.KEYWORDS, _make_format("#668899", bold=True)),
+            word_rule(self.TYPES, _make_format("#008855")),
+            word_rule(self.BUILTINS, _make_format("#6688aa")),
+            word_rule(self.ATOMS, _make_format("#221199")),
+            # preprocessor directives  (cm-meta #888)
+            (QRegularExpression(r"^\s*#.*"), _make_format("#888888")),
+            # string literals (rare in GLSL, e.g. #include)  (cm-string #a11)
+            (QRegularExpression(r"\"[^\"]*\""), _make_format("#aa1111")),
+            # single-line comments  (cm-comment #794)
+            (QRegularExpression(r"//[^\n]*"), self.comment_format),
+        ]
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self.rules:
+            it = pattern.globalMatch(text)
+            while it.hasNext():
+                match = it.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+
+        self._highlight_multiline_comments(text)
+
+    def _highlight_multiline_comments(self, text):
+        """Handle /* ... */ comments spanning multiple lines via block state."""
+        self.setCurrentBlockState(0)
+
+        start = 0 if self.previousBlockState() == 1 else text.find("/*")
+        while start >= 0:
+            end = text.find("*/", start)
+            if end == -1:
+                self.setCurrentBlockState(1)
+                length = len(text) - start
+            else:
+                length = end - start + 2
+            self.setFormat(start, length, self.comment_format)
+            start = text.find("/*", start + length)
+
+
+class AssetBrowserDialog(QDialog):
+    """Thumbnail browser for channel inputs, modeled on the web IDE's asset picker."""
+
+    THUMB_SIZE = 96
+    COLUMNS = 3
+
+    def __init__(self, media_library, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Shader Inputs")
+        self.selected_item = None
+        self.init_ui(media_library)
+
+    def init_ui(self, media_library):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        tabs = QTabWidget()
+        layout.addWidget(tabs, 1)
+
+        folders = {}
+        for item in media_library:
+            folder_label = item.get('hda', {}).get('folder', {}).get('label', 'Misc')
+            folders.setdefault(folder_label, []).append(item)
+
+        ordered = [f for f in FOLDER_ORDER if f in folders]
+        ordered += sorted(set(folders) - set(FOLDER_ORDER))
+
+        for folder_name in ordered:
+            items = sorted(folders[folder_name], key=get_asset_label)
+
+            page = QWidget()
+            grid = QGridLayout(page)
+            grid.setContentsMargins(8, 8, 8, 8)
+            grid.setSpacing(8)
+
+            for idx, item in enumerate(items):
+                grid.addWidget(self._make_asset_button(item),
+                               idx // self.COLUMNS, idx % self.COLUMNS)
+
+            # Push items to the top-left
+            grid.setRowStretch(grid.rowCount(), 1)
+            grid.setColumnStretch(self.COLUMNS, 1)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(page)
+            tabs.addTab(scroll, folder_name)
+
+        button_row = QHBoxLayout()
+        none_btn = QPushButton("None")
+        none_btn.setToolTip("Clear this channel")
+        none_btn.clicked.connect(self._choose_none)
+        button_row.addWidget(none_btn)
+        button_row.addStretch()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_row.addWidget(cancel_btn)
+        layout.addLayout(button_row)
+
+        self.resize(420, 540)
+
+    def _make_asset_button(self, item):
+        label = get_asset_label(item)
+        btn = QToolButton()
+        btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
+        btn.setText(label)
+        btn.setToolTip(f"{label} ({item.get('ctype', 'unknown')})")
+        btn.setIconSize(QSize(self.THUMB_SIZE, self.THUMB_SIZE))
+        btn.setFixedSize(self.THUMB_SIZE + 24, self.THUMB_SIZE + 36)
+
+        thumb_path = get_thumbnail_path(item)
+        if thumb_path:
+            btn.setIcon(QIcon(thumb_path))
+
+        btn.clicked.connect(lambda checked=False, it=item: self._choose_item(it))
+        return btn
+
+    def _choose_item(self, item):
+        self.selected_item = item
+        self.accept()
+
+    def _choose_none(self):
+        self.selected_item = None
+        self.accept()
+
+
+class ChannelSelector(QWidget):
+    """Thumbnail slot for a channel input (iChannel0-3); click to open the asset browser."""
+
+    THUMB_SIZE = 96
 
     def __init__(self, channel_index, parent=None):
         super().__init__(parent)
         self.channel_index = channel_index
-        self.media_library = self.load_media_library()
-        self.populate_menu()
+        self.media_library = load_media_library()
+        self.current_item = None
+        self.init_ui()
 
-    def load_media_library(self):
-        """Load media library from JSON"""
-        MEDIA_JSON_PATH = os.environ.get('MEDIA_JSON_PATH') or get_media_json_path()
-        if not MEDIA_JSON_PATH or not os.path.exists(MEDIA_JSON_PATH):
-            print(f"Warning: Could not find media.json at {MEDIA_JSON_PATH}")
-            return []
+    def init_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
 
-        try:
-            with open(MEDIA_JSON_PATH, 'r') as f:
-                return json.load(f).get('inputs', [])
-        except Exception as e:
-            print(f"Warning: Could not load media library: {e}")
-            return []
+        self.thumb_btn = QToolButton()
+        self.thumb_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
+        self.thumb_btn.setIconSize(QSize(self.THUMB_SIZE, self.THUMB_SIZE))
+        self.thumb_btn.setFixedSize(self.THUMB_SIZE + 24, self.THUMB_SIZE + 36)
+        self.thumb_btn.setToolTip("Click to choose an input")
+        self.thumb_btn.clicked.connect(self.open_browser)
+        layout.addWidget(self.thumb_btn)
 
-    def populate_menu(self):
-        """Populate dropdown with media options organized by folder structure from ichannel.json"""
-        self.addItem("None", None)
+        clear_btn = QToolButton()
+        clear_btn.setText("✕")
+        clear_btn.setToolTip("Clear this channel")
+        clear_btn.setAutoRaise(True)
+        clear_btn.clicked.connect(lambda: self.set_item(None))
+        layout.addWidget(clear_btn, 0, QtCore.Qt.AlignTop)
 
-        # Organize by folder structure from hda.folder.label
-        folders = {}
-        for item in self.media_library:
-            folder_label = item.get('hda', {}).get('folder', {}).get('label', 'Unknown')
-            if folder_label not in folders:
-                folders[folder_label] = []
-            folders[folder_label].append(item)
+        self.update_display()
 
-        # Add items by folder
-        for folder_name in sorted(folders.keys()):
-            items = folders[folder_name]
-            if items:
-                self.addItem(f"--- {folder_name} ---", None)
-                # Sort by asset label
-                items_sorted = sorted(items, key=lambda x: x.get('hda', {}).get('asset', {}).get('label', ''))
-                for item in items_sorted:
-                    asset_label = item.get('hda', {}).get('asset', {}).get('label', 'Unknown')
-                    self.addItem(f"  {asset_label}", item)
+    def open_browser(self):
+        dialog = AssetBrowserDialog(self.media_library, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.set_item(dialog.selected_item)
+
+    def set_item(self, item):
+        self.current_item = item
+        self.update_display()
+
+    def update_display(self):
+        if self.current_item:
+            self.thumb_btn.setText(get_asset_label(self.current_item))
+            thumb_path = get_thumbnail_path(self.current_item)
+            self.thumb_btn.setIcon(QIcon(thumb_path) if thumb_path else QIcon())
+        else:
+            self.thumb_btn.setText("None")
+            self.thumb_btn.setIcon(QIcon())
 
     def get_selected_input(self):
         """Get the selected input data"""
-        return self.currentData()
+        return self.current_item
 
     def set_from_api_input(self, api_input):
         """Set selection based on API input data"""
         if not api_input:
-            self.setCurrentIndex(0)
+            self.set_item(None)
             return
 
+        # Match by src (unique hash) first; ids in media.json are not unique
+        input_src = api_input.get('src')
         input_id = api_input.get('id')
-        for i in range(self.count()):
-            data = self.itemData(i)
-            if data and data.get('id') == input_id:
-                self.setCurrentIndex(i)
+        by_id = None
+        for item in self.media_library:
+            if input_src and item.get('src') == input_src:
+                self.set_item(item)
                 return
+            if by_id is None and item.get('id') == input_id:
+                by_id = item
 
-        # If not found, set to None
-        self.setCurrentIndex(0)
+        self.set_item(by_id)
 
 
 class SamplerOptionsPopup(QDialog):
@@ -177,6 +431,12 @@ class RenderPassTab(QWidget):
         self.code_editor = QPlainTextEdit()
         self.code_editor.setFont(QFont("Consolas", 10))
         self.code_editor.setPlaceholderText("void mainImage( out vec4 fragColor, in vec2 fragCoord )\n{\n    // Normalized pixel coordinates (from 0 to 1)\n    vec2 uv = fragCoord/iResolution.xy;\n\n    // Time varying pixel color\n    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));\n\n    // Output to screen\n    fragColor = vec4(col,1.0);\n}")
+
+        # Dark theme + GLSL syntax highlighting to match the Shadertoy web IDE
+        self.code_editor.setStyleSheet(
+            "QPlainTextEdit { background-color: #000000; color: #b0b0b0; }"
+        )
+        self.highlighter = GLSLHighlighter(self.code_editor.document())
 
         # Set code from pass data
         code = self.pass_data.get('code', '')
