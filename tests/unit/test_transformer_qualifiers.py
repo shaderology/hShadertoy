@@ -508,9 +508,10 @@ def test_multiple_dereferences(parser, transformer, emitter):
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    # Both assignments should have dereference on LHS
+    # Both assignments should have dereference on LHS; the RHS read of the
+    # pointer param also dereferences (category B fix): *v = *v * 2.0f.
     assert '*v = (float2)' in opencl
-    assert '*v = v * 2.0f' in opencl  # LHS has dereference
+    assert '*v = *v * 2.0f' in opencl
 
 
 def test_dereference_compound_assignment(parser, transformer, emitter):
@@ -582,8 +583,10 @@ def test_inout_dereference(parser, transformer, emitter):
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    # LHS has dereference
-    assert '*x = x * 2.0f' in opencl
+    # Both sides dereference the inout pointer param (category B fix):
+    # *x = *x * 2.0f  (previously the RHS read emitted bare `x`, a float*, which
+    # was invalid OpenCL).
+    assert '*x = *x * 2.0f' in opencl
 
 
 def test_complex_expression_assignment(parser, transformer, emitter):

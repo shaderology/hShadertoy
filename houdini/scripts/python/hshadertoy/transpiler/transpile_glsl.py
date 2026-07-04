@@ -25,6 +25,81 @@ class TranspilationError(Exception):
     pass
 
 
+def _normalize_main_image(glsl_source: str) -> str:
+    """
+    Rewrite a custom-named mainImage to the standard fragColor/fragCoord form.
+
+    Shadertoy permits custom parameter names (golf shaders often use
+    ``void mainImage(out vec4 O, vec2 U)``), but the Houdini kernel always
+    exposes ``fragColor``/``fragCoord``. Rather than renaming identifiers in the
+    body (which risks clobbering same-named locals in nested scopes), we keep the
+    body verbatim and bridge the names with alias declarations plus a final write
+    to ``fragColor``::
+
+        void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+            vec4 O = vec4(0.0, 0.0, 0.0, 1.0);   // out alias
+            vec2 U = fragCoord;                  // in alias
+            ...original body...
+            fragColor = O;                       // final write
+        }
+
+    The downstream transform/split/pointer-fix is then name-agnostic. Standard
+    signatures are returned unchanged.
+    """
+    parser = GLSLParser()
+    try:
+        ast = parser.parse(glsl_source)
+    except Exception:
+        return glsl_source
+
+    main = None
+    for node in ast.named_children:
+        if node.type == "function_definition" and node.name == "mainImage":
+            main = node
+            break
+    if main is None:
+        return glsl_source
+
+    params = main.parameters
+    out_name, in_name = "fragColor", "fragCoord"
+    if len(params) >= 1:
+        decl = params[0].child_by_field_name("declarator")
+        if decl is not None and decl.type == "identifier" and decl.text:
+            out_name = decl.text.strip()
+    if len(params) >= 2:
+        decl = params[1].child_by_field_name("declarator")
+        if decl is not None and decl.type == "identifier" and decl.text:
+            in_name = decl.text.strip()
+
+    if out_name == "fragColor" and in_name == "fragCoord":
+        return glsl_source
+
+    body = main.body
+    if body is None:
+        return glsl_source
+
+    inner = body.text.strip()
+    if inner.startswith("{") and inner.endswith("}"):
+        inner = inner[1:-1]
+
+    out_alias = f"    vec4 {out_name} = vec4(0.0, 0.0, 0.0, 1.0);\n" if out_name != "fragColor" else ""
+    in_alias = f"    vec2 {in_name} = fragCoord;\n" if in_name != "fragCoord" else ""
+    finalize = f"\n    fragColor = {out_name};" if out_name != "fragColor" else ""
+
+    new_fn = (
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        f"{out_alias}{in_alias}{inner}{finalize}\n"
+        "}"
+    )
+
+    # Splice by byte offsets so surrounding code (helpers, globals, comments) is
+    # preserved exactly.
+    src_bytes = glsl_source.encode("utf-8")
+    start = main._node.start_byte
+    end = main._node.end_byte
+    return src_bytes[:start].decode("utf-8") + new_fn + src_bytes[end:].decode("utf-8")
+
+
 def _detect_renderpass_type(glsl_source: str) -> str:
     """
     Detect the renderpass type from GLSL source.
@@ -279,6 +354,11 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         raise TranspilationError("Invalid GLSL source: must be a non-empty string")
 
     try:
+        # Normalize custom mainImage parameter names (e.g. `out vec4 O, vec2 U`)
+        # to the standard fragColor/fragCoord via alias injection, so the rest of
+        # the pipeline is name-agnostic.
+        glsl_source = _normalize_main_image(glsl_source)
+
         # Auto-detect mode if not provided
         if mode is None:
             mode = _detect_renderpass_type(glsl_source)
@@ -297,6 +377,9 @@ def transpile(glsl_source: str, mode: str = None) -> str:
 
         # Stage 4: Transform AST
         transformer = ASTTransformer(type_checker)
+        # The renderpass entry function's out-param (fragColor) is a host @KERNEL
+        # local, not a deref'able pointer (see ASTTransformer.entry_function).
+        transformer.entry_function = mode
         transformed_ast = transformer.transform(ast)
 
         # Stage 5: Emit OpenCL

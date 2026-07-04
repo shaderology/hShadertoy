@@ -1,5 +1,6 @@
 import hou, json
 import hshadertoy.transpiler.transpiler_placeholder as transpiler_placeholder
+from hshadertoy.builder.builder import _safe_node_name
 
 def builder(payload, mode="Template"):
 
@@ -12,7 +13,7 @@ def builder(payload, mode="Template"):
     # Ensure /obj exists
     obj = hou.node("/obj")
     # Create a COP network under /obj
-    copnet = obj.createNode("copnet", shader_name.replace(" ", "_") )
+    copnet = obj.createNode("copnet", _safe_node_name(shader_name) )
     # Create the hShadertoy node inside the COP network
     node = copnet.createNode("hShadertoy::shadertoy", "shadertoy1" )
     print(f"hShadertoy HDA node created: {node.path()}\n")

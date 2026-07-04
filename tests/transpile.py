@@ -148,7 +148,7 @@ def post_process_ifdef_blocks(opencl_code: str) -> str:
     return opencl_code
 
 
-def extract_main_image_sections(glsl_source: str, parser: GLSLParser) -> Tuple[str, str]:
+def extract_main_image_sections(glsl_source: str, parser: GLSLParser) -> Tuple[str, str, str, str]:
     """
     Extract sections before and inside mainImage() using AST.
 
@@ -157,7 +157,10 @@ def extract_main_image_sections(glsl_source: str, parser: GLSLParser) -> Tuple[s
         parser: GLSLParser instance
 
     Returns:
-        Tuple of (code_before_main, main_image_body)
+        Tuple of (code_before_main, main_image_body, out_name, in_name).
+        out_name/in_name are the user's mainImage parameter names (Shadertoy
+        allows custom names, e.g. `out vec4 O, vec2 U`); they default to
+        "fragColor"/"fragCoord" when the standard names are used or absent.
 
     Raises:
         TranspileError: If mainImage() not found
@@ -227,10 +230,25 @@ def extract_main_image_sections(glsl_source: str, parser: GLSLParser) -> Tuple[s
 
     main_image_body = body_text.strip()
 
-    return code_before_main, main_image_body
+    # Capture the user's mainImage parameter names. Shadertoy permits custom
+    # names (golf shaders frequently use `out vec4 O, vec2 U`), but the Houdini
+    # kernel always exposes `fragColor`/`fragCoord`. transpile() bridges the gap
+    # via alias injection rather than renaming identifiers in the body.
+    out_name, in_name = "fragColor", "fragCoord"
+    params = main_image_node.parameters
+    if len(params) >= 1:
+        decl = params[0].child_by_field_name("declarator")
+        if decl is not None and decl.type == "identifier" and decl.text:
+            out_name = decl.text.strip()
+    if len(params) >= 2:
+        decl = params[1].child_by_field_name("declarator")
+        if decl is not None and decl.type == "identifier" and decl.text:
+            in_name = decl.text.strip()
+
+    return code_before_main, main_image_body, out_name, in_name
 
 
-def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
+def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> TranspileResult:
     """
     Transpile GLSL shader source to OpenCL.
 
@@ -240,6 +258,11 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
     Args:
         glsl_source: GLSL source code string
         verbose: If True, print transformation stages
+        common: Optional Shadertoy "Common" tab GLSL. It is prepended to the pass
+            source before processing. Common has no mainImage(), so its macros and
+            helper functions flow into the header and become available to the pass
+            body. This mirrors Houdini, where Common is injected as header code
+            before @KERNEL into every renderpass node.
 
     Returns:
         TranspileResult with header, kernel, and full OpenCL code
@@ -251,6 +274,12 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
         print("=" * 70)
         print("GLSL to OpenCL Transpilation")
         print("=" * 70)
+
+    # Stage -1: Merge the Common tab (if any) ahead of the pass source.
+    if common and common.strip():
+        glsl_source = common.rstrip() + "\n\n" + glsl_source
+        if verbose:
+            print(f"  [OK] Prepended Common tab ({len(common)} chars)")
 
     # Stage 0: Transform preprocessor directives
     if verbose:
@@ -270,7 +299,7 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
 
     # Extract sections BEFORE transformation
     try:
-        header_glsl, kernel_glsl_body = extract_main_image_sections(glsl_source, parser)
+        header_glsl, kernel_glsl_body, out_name, in_name = extract_main_image_sections(glsl_source, parser)
     except TranspileError as e:
         raise
     except Exception as e:
@@ -305,6 +334,10 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
         if header_glsl:
             print("  -> Transforming header (globals/functions)...")
 
+    # Category A — program-scope globals whose initializer is not a compile-time
+    # constant are emitted bare by the transformer; their real initializers are
+    # collected here and assigned at the top of the kernel body below.
+    hoisted_global_inits = []
     header_opencl = ""
     if header_glsl:
         try:
@@ -325,6 +358,9 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
                 # Header contains actual code, parse and transform normally
                 header_ast = parser.parse(header_glsl)
                 header_ir = transformer.transform(header_ast)
+                # Capture hoisted global initializers before the kernel pass
+                # (transform() resets the list on each call).
+                hoisted_global_inits = list(transformer.hoisted_global_inits)
                 emitter = OpenCLEmitter(indent_size=4)
                 header_opencl = emitter.emit(header_ir)
 
@@ -342,8 +378,25 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
     if verbose:
         print("\n[5/6] Transforming kernel (mainImage body)...")
 
-    # Wrap kernel body in mainImage signature for AST parsing
-    kernel_glsl_full = f"void mainImage(out vec4 fragColor, in vec2 fragCoord) {{\n{kernel_glsl_body}\n}}"
+    # Wrap kernel body in mainImage signature for AST parsing.
+    # For custom parameter names (e.g. `out vec4 O, vec2 U`) we keep the body
+    # verbatim and bridge the names with alias declarations + a final write to
+    # fragColor. This avoids renaming identifiers in the body (which would risk
+    # clobbering same-named locals in nested scopes for single-letter names).
+    out_alias = ""
+    in_alias = ""
+    out_finalize = ""
+    if out_name != "fragColor":
+        out_alias = f"    vec4 {out_name} = vec4(0.0, 0.0, 0.0, 1.0);\n"
+        out_finalize = f"\n    fragColor = {out_name};"
+    if in_name != "fragCoord":
+        in_alias = f"    vec2 {in_name} = fragCoord;\n"
+
+    kernel_glsl_full = (
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        f"{out_alias}{in_alias}{kernel_glsl_body}{out_finalize}\n"
+        "}"
+    )
 
     try:
         kernel_ast = parser.parse(kernel_glsl_full)
@@ -357,7 +410,7 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
     # The transformed code is now OpenCL, so extract body again
     try:
         # Parse the OpenCL to extract body (it's valid C-like syntax)
-        _, kernel_opencl_body = extract_main_image_sections(kernel_opencl_full, parser)
+        _, kernel_opencl_body, _, _ = extract_main_image_sections(kernel_opencl_full, parser)
     except Exception as e:
         # Fallback: regex extraction
         match = re.search(
@@ -381,6 +434,18 @@ def transpile(glsl_source: str, verbose: bool = False) -> TranspileResult:
     # This is a workaround for Session 9's limitation where code inside #ifdef blocks
     # is not transformed by the AST transformer
     kernel_opencl_body = post_process_ifdef_blocks(kernel_opencl_body)
+
+    # Category A — assign hoisted program-scope global initializers at the top of
+    # the kernel body (in declaration order, so inter-global dependencies hold).
+    # The globals are declared bare in the header; runtime uniforms (iTime, …)
+    # and all helper functions are available here, so arithmetic/calls that
+    # OpenCL forbids in a file-scope initializer are legal in this kernel context.
+    if hoisted_global_inits:
+        hoist_emitter = OpenCLEmitter(indent_size=4)
+        hoist_lines = ["    // ---- hoisted global initializers (category A) ----"]
+        for name, init_ir in hoisted_global_inits:
+            hoist_lines.append(f"    {name} = {hoist_emitter.emit(init_ir)};")
+        kernel_opencl_body = "\n".join(hoist_lines) + "\n" + kernel_opencl_body
 
     # Add comment markers to kernel
     kernel_opencl = (
@@ -475,7 +540,8 @@ def transpile_file(
     output_dir: Path,
     full_mode: bool = False,
     verbose: bool = False,
-    validate: bool = False
+    validate: bool = False,
+    common_path: Optional[Path] = None
 ) -> bool:
     """
     Transpile a GLSL file and write output files.
@@ -486,6 +552,7 @@ def transpile_file(
         full_mode: If True, output single full.cl file instead of split
         verbose: If True, show transformation stages
         validate: If True, validate OpenCL compilation
+        common_path: Optional path to a Shadertoy "Common" tab GLSL file to merge
 
     Returns:
         True if successful, False otherwise
@@ -502,9 +569,18 @@ def transpile_file(
         print(f"Error reading input file: {e}")
         return False
 
+    # Read optional Common tab
+    common_source = ""
+    if common_path:
+        try:
+            common_source = common_path.read_text(encoding='utf-8')
+        except Exception as e:
+            print(f"Error reading common file: {e}")
+            return False
+
     # Transpile
     try:
-        result = transpile(glsl_source, verbose=verbose)
+        result = transpile(glsl_source, verbose=verbose, common=common_source)
     except TranspileError as e:
         print(f"Transpilation error: {e}")
         return False
@@ -629,6 +705,14 @@ Module usage:
         help="Validate OpenCL compilation (requires PyOpenCL)"
     )
 
+    parser.add_argument(
+        "--common",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Optional Shadertoy 'Common' tab GLSL file to merge before the pass"
+    )
+
     args = parser.parse_args()
 
     # Validate input
@@ -646,13 +730,19 @@ Module usage:
     else:
         output_dir = args.input.parent
 
+    # Validate optional common file
+    if args.common and not args.common.exists():
+        print(f"Error: Common file not found: {args.common}", file=sys.stderr)
+        sys.exit(1)
+
     # Transpile
     success = transpile_file(
         args.input,
         output_dir,
         full_mode=args.full,
         verbose=args.verbose,
-        validate=args.validate
+        validate=args.validate,
+        common_path=args.common
     )
 
     sys.exit(0 if success else 1)

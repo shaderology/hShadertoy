@@ -6,8 +6,31 @@ Because we're all tired of manually setting 200+ parameters.
 """
 
 import json
+import re
 import hou
 from typing import Dict, Any, Optional, Tuple
+
+
+def _safe_node_name(name: str, fallback: str = "shadertoy") -> str:
+    """
+    Sanitize an arbitrary shader title into a valid Houdini node name.
+
+    Houdini node names only allow [A-Za-z0-9_] and must not start with a
+    digit. Shadertoy titles allow anything ("There's a bug in the TV ",
+    "2.4GHz", "[SH17C] Schooling"...), so every run of other characters
+    collapses to a single underscore.
+
+    >>> _safe_node_name("There's a bug in the TV ")
+    'There_s_a_bug_in_the_TV'
+    >>> _safe_node_name("2.4GHz")
+    '_2_4GHz'
+    """
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", name).strip("_")
+    if not safe:
+        safe = fallback
+    if safe[0].isdigit():
+        safe = "_" + safe
+    return safe
 
 
 # Renderpass name to HDA parameter token mapping
@@ -234,7 +257,7 @@ def build_shadertoy_hda(
         # Either no parent specified, or parent is not a COP network
         # Create a dedicated COP network under /obj for this shader
         obj = hou.node("/obj")
-        parent_node = obj.createNode("copnet", shader_name.replace(" ", "_"))
+        parent_node = obj.createNode("copnet", _safe_node_name(shader_name))
         print(f"Created COP network: {parent_node.path()}")
 
     # Create the HDA node

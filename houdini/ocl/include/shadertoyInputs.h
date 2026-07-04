@@ -1,14 +1,43 @@
+// HEADER code from Houdini DIgital Asset (HDA). 
+// #bind macros are Houdini Copernicus-specific macros that bind parameters and layers to the OpenCL kernel.
+// Contains VEX expressions resolved in HDA UI field before being passed to OpenCL kernel.
+
+// Uniform Shadertoy-like inputs
+#bind parm iDate float4
+#bind parm iFrame float
+#bind parm iFrameRate float
+#bind parm iMouse float4
+
+// Varying Shadertoy-like inputs
+#bind layer size_ref opt
+#bind layer fragCoord float2 opt
+#bind layer iChannel0? opt val=0
+#bind layer iChannel1? opt val=0
+#bind layer iChannel2? opt val=0
+#bind layer iChannel3? opt val=0
+
+// Shadertoy output
+#bind layer fragColor noread write
+
+// ---- Simplified GLSL Helper Functions ----
+// Simple, reliable helper functions for common operations
+#include "glslHelpers.h"
+
+// ---- Shadertoy-like texture() for Copernicus ----
+#include "textureHelpers.h"
+
+
 // Shadertoy has global variables that can be called inside functions
 // We just initiate empty variables so that code compiles if used inside func()
 // They get mapped inside kernel
-static float3 iResolution = (float3)(512.0f, 288.0f, 0.0f);
-static float iTime = 0.0000f;
-static float iTimeDelta = 0.0000f;
-static float iFrameRate = 24.0000f;
-static int iFrame = 0;
-static float4 iMouse = (float4)(0.0000f, 0.0000f, 0.0000f, 0.0000f );
-static float4 iDate = (float4)(2025.0000f, 12.0000f, 31.0000f, 60.0000f );
-static const float iSampleRate = 44100.0f;
+static float3 iResolution = (float3)(`rint(ch('init_iResolutionx'))+'.0f'`, `rint(ch('init_iResolutiony'))+'.0f'`, 0.0f);
+static float iTime = `fpadzero(1,4,ch('init_iTime'))+'f'`;
+static float iTimeDelta = `fpadzero(1,4,ch('init_iTimeDelta'))+'f'`;
+static float iFrameRate = `fpadzero(1,4,ch('init_iFrameRate'))+'f'`;
+static int iFrame = `rint(ch('init_iFrame'))`;
+static float4 iMouse = (float4)(`fpadzero(1,4,ch('init_iMousex'))+'f'`, `fpadzero(1,4,ch('init_iMousey'))+'f'`, `fpadzero(1,4,ch('init_iMousez'))+'f'`, `fpadzero(1,4,ch('init_iMousew'))+'f'` );
+static float4 iDate = (float4)(`fpadzero(1,4,ch('init_iDatex'))+'f'`, `fpadzero(1,4,ch('init_iDatey'))+'f'`, `fpadzero(1,4,ch('init_iDatez'))+'f'`, `fpadzero(1,4,ch('init_iDatew'))+'f'` );
+static const float iSampleRate = `fpadzero(1,1,ch('init_iSampleRate'))+'f'`;
 
 static const IMX_Layer* iChannel0;
 static const IMX_Layer* iChannel1;
@@ -21,32 +50,32 @@ static float3 iChannelResolution[4];
 #ifdef CUBEMAP_RENDERPASS
     #define DO_CUBEMAP \
         float3 rayDir; \
-        shadertoy_cubemap(AT_ix,AT_iy,AT_xres,AT_yres,&rayDir,&iResolution);
+        shadertoy_cubemap(@ix,@iy,@xres,@yres,&rayDir,&iResolution);
 #else
     #define DO_CUBEMAP /* nothing */
 #endif
 
 #define SHADERTOY_INPUTS \
-    iResolution = (float3)(AT_xres, AT_yres, 0.0f); \
-    iTime = AT_Time; \
-    iFrameRate = AT_iFrameRate; \
-    iFrame = AT_iFrame; \
-    iMouse = AT_iMouse;\
-    iDate = AT_iDate;\
-    iChannel0 = AT_iChannel0_layer; \
-    iChannel1 = AT_iChannel1_layer; \
-    iChannel2 = AT_iChannel2_layer; \
-    iChannel3 = AT_iChannel3_layer; \
-    iChannelTime[0] = AT_Time; \
-    iChannelTime[1] = AT_Time; \
-    iChannelTime[2] = AT_Time; \
-    iChannelTime[3] = AT_Time; \
-    iChannelResolution[0] = (float3)(AT_iChannel0_res, 0.0f); \
-    iChannelResolution[1] = (float3)(AT_iChannel1_res, 0.0f); \
-    iChannelResolution[2] = (float3)(AT_iChannel2_res, 0.0f); \
-    iChannelResolution[3] = (float3)(AT_iChannel3_res, 0.0f); \
-    float2 fragCoord = AT_fragCoord; \
-    if (!AT_fragCoord_bound) { fragCoord = (float2)(AT_ix, AT_iy); }\
+    iResolution = (float3)(@xres, @yres, 0.0f); \
+    iTime = @Time; \
+    iFrameRate = @iFrameRate; \
+    iFrame = @iFrame; \
+    iMouse = @iMouse;\
+    iDate = @iDate;\
+    iChannel0 = @iChannel0.layer; \
+    iChannel1 = @iChannel1.layer; \
+    iChannel2 = @iChannel2.layer; \
+    iChannel3 = @iChannel3.layer; \
+    iChannelTime[0] = @Time; \
+    iChannelTime[1] = @Time; \
+    iChannelTime[2] = @Time; \
+    iChannelTime[3] = @Time; \
+    iChannelResolution[0] = (float3)(@iChannel0.res, 0.0f); \
+    iChannelResolution[1] = (float3)(@iChannel1.res, 0.0f); \
+    iChannelResolution[2] = (float3)(@iChannel2.res, 0.0f); \
+    iChannelResolution[3] = (float3)(@iChannel3.res, 0.0f); \
+    float2 fragCoord = @fragCoord; \
+    if (!@fragCoord.bound) { fragCoord = (float2)(@ix, @iy); }\
     float4 fragColor = (float4)(0.0f, 0.0f, 0.0f, 1.0f); \
     DO_CUBEMAP
 

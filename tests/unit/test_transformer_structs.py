@@ -203,7 +203,16 @@ class TestStructAssignment:
     """Test struct assignment."""
 
     def test_struct_copy_assignment(self):
-        """Test struct copy assignment."""
+        """Test struct copy assignment at program scope.
+
+        `Point a = {...}` is a compile-time-constant brace initializer and stays
+        in place. `Point b = a;` is NOT a compile-time constant at file scope (a
+        global/const is not a constant expression in OpenCL C — it fails with
+        "initializer element is not a compile-time constant"), so category-A
+        hoisting emits `b` bare and moves `b = a;` into the kernel body. In this
+        transformer-only path the hoisted assignment is recorded (not injected),
+        so only the bare declaration appears here.
+        """
         glsl = """
 struct Point { float x, y, z; };
 Point a = Point(1.0, 2.0, 3.0);
@@ -211,9 +220,9 @@ Point b = a;
 """
         opencl = transform_and_emit(glsl)
 
-        # Struct assignment should work as-is in C
+        # Constant brace-init global stays; non-constant copy-init is hoisted.
         assert "Point a = {1.0f, 2.0f, 3.0f};" in opencl
-        assert "Point b = a;" in opencl
+        assert "Point b;" in opencl
 
 
 class TestStructArrays:

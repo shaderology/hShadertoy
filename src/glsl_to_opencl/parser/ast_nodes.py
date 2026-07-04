@@ -188,7 +188,14 @@ class BinaryExpression(ASTNode):
     @property
     def left(self) -> ASTNode:
         """Left operand."""
-        return self.named_children[0] if self.named_children else None
+        # Use tree-sitter field access so interleaved comment nodes (which are
+        # *named* children) don't shift positional indices. Fall back to the
+        # first non-comment named child if the grammar lacks the field.
+        field = self.child_by_field_name("left")
+        if field is not None:
+            return field
+        operands = [c for c in self.named_children if c.type != "comment"]
+        return operands[0] if operands else None
 
     @property
     def operator(self) -> str:
@@ -204,7 +211,14 @@ class BinaryExpression(ASTNode):
     @property
     def right(self) -> ASTNode:
         """Right operand."""
-        return self.named_children[1] if len(self.named_children) > 1 else None
+        # See `left`: a comment between operator and right operand appears as a
+        # named child, so named_children[1] would wrongly return the comment and
+        # the real operand would be dropped. Prefer the grammar's 'right' field.
+        field = self.child_by_field_name("right")
+        if field is not None:
+            return field
+        operands = [c for c in self.named_children if c.type != "comment"]
+        return operands[1] if len(operands) > 1 else None
 
 
 def wrap_node(ts_node, source: str) -> ASTNode:

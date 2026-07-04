@@ -30,6 +30,29 @@ from . import transformed_ast as IR
 # Import TYPE_NAME_MAP at module level for use in _transform_call_expression
 # This avoids repeated imports inside the method
 
+# Vector type name -> (element base, width), accepting BOTH name families:
+# declarations record GLSL names ('vec3') in local_types while parameters
+# record OpenCL names ('float3'). The 'bool' base marks bvec masks, whose
+# OpenCL representation is an int vector (-1 for true from vector relational
+# operators, where GLSL bvec->number conversion requires 1).
+VECTOR_TYPE_INFO = {
+    'vec2': ('float', 2), 'vec3': ('float', 3), 'vec4': ('float', 4),
+    'float2': ('float', 2), 'float3': ('float', 3), 'float4': ('float', 4),
+    'ivec2': ('int', 2), 'ivec3': ('int', 3), 'ivec4': ('int', 4),
+    'int2': ('int', 2), 'int3': ('int', 3), 'int4': ('int', 4),
+    'uvec2': ('uint', 2), 'uvec3': ('uint', 3), 'uvec4': ('uint', 4),
+    'uint2': ('uint', 2), 'uint3': ('uint', 3), 'uint4': ('uint', 4),
+    'bvec2': ('bool', 2), 'bvec3': ('bool', 3), 'bvec4': ('bool', 4),
+}
+
+# OpenCL vector name -> GLSL name, for TYPE_NAME_MAP lookups on types that
+# came from parameter registration (see VECTOR_TYPE_INFO note above).
+OPENCL_TO_GLSL_NAME = {
+    'float2': 'vec2', 'float3': 'vec3', 'float4': 'vec4',
+    'int2': 'ivec2', 'int3': 'ivec3', 'int4': 'ivec4',
+    'uint2': 'uvec2', 'uint3': 'uvec3', 'uint4': 'uvec4',
+}
+
 
 class TransformationError(Exception):
     """Raised when transformation fails."""
@@ -79,6 +102,15 @@ class ASTTransformer:
         # Set of parameter names that are pointers (need * dereference on assignment)
         self.pointer_params = set()
 
+        # Name of the renderpass entry function (mainImage / mainCubemap /
+        # mainVR / mainSound). Its out-param (fragColor) is wrapped as a pointer
+        # for parsing, but the host (tests/transpile.py + Houdini @KERNEL)
+        # provides it as a plain LOCAL in the final kernel, so it must NOT be
+        # treated as a deref'able pointer. A HELPER that merely shares the name
+        # (e.g. a user mainVR called from mainImage) keeps a real out-param.
+        # Hosts may override per renderpass type.
+        self.entry_function = 'mainImage'
+
         # Track function signatures for handling call sites with out parameters
         # Maps function name -> list of parameter info (name, is_pointer)
         self.function_signatures = {}
@@ -98,6 +130,16 @@ class ASTTransformer:
         # Track current function's return type during body transformation
         # Used to detect if return statements need special handling
         self.current_function_return_type = None
+
+        # Category A — program-scope global initializer hoisting.
+        # True only while transforming top-level (file-scope) declarations;
+        # False inside function bodies. A global whose initializer is NOT a
+        # compile-time constant (any arithmetic or call) is rejected by OpenCL
+        # at program scope, so it is emitted as a bare declaration and its real
+        # initializer is recorded here as (name, initializer_ir) for the host to
+        # assign per-invocation at the top of the kernel body.
+        self._global_scope = False
+        self.hoisted_global_inits = []
 
         # Track user-defined struct types for constructor detection
         # Maps struct name -> dict of field info {'field_name': 'field_type', ...}
@@ -132,6 +174,15 @@ class ASTTransformer:
             'uint': 'uint',
             'bool': 'bool',
             'void': 'void',
+            # Samplers: the Copernicus runtime has no sampler types — channels
+            # are layer pointers, the same type every texture builtin consumes
+            # (houdini/ocl/include/textureHelpers.h) and the same type the
+            # runtime header gives iChannel0..3. Used for user-function sampler
+            # params (the triplanar tex3D(sampler2D,...) idiom); NOT marked
+            # is_pointer, so the out-param dereference machinery ignores them.
+            'sampler2D': 'const IMX_Layer*',
+            'sampler3D': 'const IMX_Layer*',
+            'samplerCube': 'const IMX_Layer*',
         }
 
     def transform(self, ast: ASTNode) -> IR.TranslationUnit:
@@ -153,12 +204,16 @@ class ASTTransformer:
                 ast.start_point
             )
 
-        # Transform all top-level declarations
+        # Transform all top-level declarations. Top-level declarations are at
+        # program (file) scope; hoisted_global_inits is (re)populated here.
+        self.hoisted_global_inits = []
+        self._global_scope = True
         declarations = []
         for decl in ast.named_children:
             transformed = self._transform_node(decl)
             if transformed is not None:
                 declarations.append(transformed)
+        self._global_scope = False
 
         return IR.TranslationUnit(
             declarations=declarations,
@@ -234,8 +289,12 @@ class ASTTransformer:
         text = node.text
         location = node.start_point
 
-        # Check if it's a float literal (has decimal point or exponent)
-        if '.' in text or 'e' in text.lower():
+        # Check if it's a float literal (has decimal point or exponent).
+        # Exclude hex literals: a hex int like 0x9e3853U contains the hex digit
+        # 'e' and must NOT be treated as a float exponent (that appended a stray
+        # 'f' -> invalid 'Uf' suffix or a silently wrong value).
+        text_lower = text.lower()
+        if not text_lower.startswith('0x') and ('.' in text or 'e' in text_lower):
             # Add 'f' suffix if not present
             if not text.endswith('f') and not text.endswith('F'):
                 text = text + 'f'
@@ -266,7 +325,7 @@ class ASTTransformer:
     # Identifiers and Types
     # ========================================================================
 
-    def _transform_identifier(self, node: ASTNode) -> IR.Identifier:
+    def _transform_identifier(self, node: ASTNode) -> IR.TransformedNode:
         """Transform identifier (variable reference)."""
         name = node.text
 
@@ -274,11 +333,23 @@ class ASTTransformer:
         symbol = self.symbol_table.lookup(name)
         glsl_type = symbol.glsl_type if symbol else None
 
-        return IR.Identifier(
+        ident = IR.Identifier(
             name=name,
             glsl_type=glsl_type,
             source_location=node.start_point
         )
+
+        # out/inout params are OpenCL pointers: every READ of one dereferences
+        # to *p (incl. as an assignment target -> *p = ..., and a member base
+        # -> (*p).x). The one exception is passing a pointer param to another
+        # pointer param, which _transform_call_expression unwraps back to bare p.
+        if name in self.pointer_params:
+            return IR.UnaryOp(
+                operator='*',
+                operand=ident,
+                source_location=node.start_point
+            )
+        return ident
 
     def _transform_type_name(self, node: ASTNode) -> str:
         """
@@ -338,6 +409,123 @@ class ASTTransformer:
             return type_str
 
         return None
+
+    def _is_bool_mask(self, node: IR.TransformedNode) -> str:
+        """
+        True if a node is a boolean-vector mask: a relational expression
+        (`a < b`, possibly parenthesized — produced by lowering lessThan/etc.) or
+        a bvec-typed value. Used to route mix(a,b,mask) -> select(a,b,mask).
+        """
+        inner = node.expression if isinstance(node, IR.ParenthesizedExpression) else node
+        if isinstance(inner, IR.BinaryOp) and inner.operator in ('<', '<=', '>', '>=', '==', '!='):
+            return True
+        return self._get_type_name(node) in ('bvec2', 'bvec3', 'bvec4')
+
+    def _transform_vector_conversion_ctor(
+        self,
+        function_name: str,
+        opencl_type: str,
+        arg: IR.TransformedNode,
+        location: tuple
+    ) -> Optional[IR.TransformedNode]:
+        """
+        Category N: a vector constructor whose single argument is itself a
+        vector cannot be emitted as a C-style cast — OpenCL's (T)(...) vector
+        literal only broadcasts scalars or assembles component lists, so
+        (int2)(float2_expr) is rejected ("invalid conversion between
+        ext-vector types") and (float3)(float4_expr) cannot truncate.
+
+        Rewrites:
+          element-type change, same width  ivec2(v2)  -> convert_int2(v2)
+          truncation, same element base    vec3(v4)   -> v4.xyz
+          truncation + element change      ivec2(v3)  -> convert_int2(v3.xy)
+          bool mask (relational / bvec)    vec4(a<b)  -> convert_float4((a < b) & 1)
+        The mask is `& 1`-normalized because OpenCL vector comparisons yield
+        -1 for true where GLSL bvec->number conversion requires 1 (& 1 maps
+        both -1- and 1-for-true representations to 1).
+
+        Returns None whenever the existing cast emission is already correct
+        (scalar broadcast, component list, identity, widening, unknown
+        argument type) so the caller falls through unchanged.
+        """
+        target = VECTOR_TYPE_INFO.get(function_name)
+        if target is None:
+            return None  # scalar/matrix/sampler constructor: not this rewrite
+        target_base, target_width = target
+
+        arg_type = self._get_type_name(arg)
+        arg_info = VECTOR_TYPE_INFO.get(arg_type) if arg_type else None
+        if arg_info is None:
+            return None  # scalar broadcast or unknown type: keep the cast
+        arg_base, arg_width = arg_info
+        # Vector comparisons are typed vecN by _infer_binary_op_type but hold
+        # an int -1/0 mask at runtime; detect them structurally.
+        if self._is_bool_mask(arg):
+            arg_base = 'bool'
+
+        if arg_width < target_width:
+            return None  # vec4(vec2) is invalid GLSL; leave untouched
+
+        glsl_type = TYPE_NAME_MAP.get(function_name)
+        node = arg
+        if arg_width > target_width:
+            # Truncation is a swizzle, not a cast: vec3(v4) -> v4.xyz
+            base = node
+            if isinstance(node, (IR.BinaryOp, IR.UnaryOp, IR.TernaryOp)):
+                base = IR.ParenthesizedExpression(
+                    expression=node, source_location=location)
+            node = IR.MemberAccess(
+                base=base,
+                member='xyzw'[:target_width],
+                glsl_type=glsl_type if arg_base == target_base else None,
+                source_location=location
+            )
+
+        if arg_base == 'bool' and target_base != 'bool':
+            mask = node
+            if isinstance(mask, (IR.BinaryOp, IR.UnaryOp, IR.TernaryOp)):
+                mask = IR.ParenthesizedExpression(
+                    expression=mask, source_location=location)
+            node = IR.ParenthesizedExpression(
+                expression=IR.BinaryOp(
+                    operator='&',
+                    left=mask,
+                    right=IR.IntLiteral(value='1'),
+                    source_location=location
+                ),
+                glsl_type=glsl_type,
+                source_location=location
+            )
+            arg_base = 'int'
+
+        # bvec targets share OpenCL's int-vector representation
+        if target_base == 'bool':
+            target_base = 'int'
+
+        if arg_base == target_base:
+            # Pure truncation or pure mask normalization; None if untouched.
+            return node if node is not arg else None
+        return IR.CallExpression(
+            function=f'convert_{opencl_type}',
+            arguments=[node],
+            glsl_type=glsl_type,
+            source_location=location
+        )
+
+    def _vector_width_suffix(self, node: IR.TransformedNode) -> str:
+        """
+        Width suffix ('', '2', '3', '4') for an as_float/as_uint/as_int call,
+        inferred from a scalar/vecN argument's type. Returns '' (scalar) when the
+        width is unknown.
+        """
+        type_name = None
+        if isinstance(node, IR.TypeConstructor):
+            type_name = node.type_name
+        if type_name is None:
+            type_name = self._get_type_name(node)
+        if type_name and type_name[-1] in '234':
+            return type_name[-1]
+        return ''
 
     def _is_matrix_type(self, type_name: str) -> bool:
         """
@@ -731,7 +919,10 @@ class ASTTransformer:
         if function_name in vector_passthrough_functions and arguments:
             arg_type = self._get_type_name(arguments[0])
             if arg_type:
-                return TYPE_NAME_MAP.get(arg_type)
+                # Parameters register OpenCL names ('float3'); normalize so
+                # the GLSL-keyed TYPE_NAME_MAP lookup doesn't come up empty.
+                return TYPE_NAME_MAP.get(
+                    OPENCL_TO_GLSL_NAME.get(arg_type, arg_type))
 
         # Cross product - returns vec3
         elif function_name == 'GLSL_cross':
@@ -743,7 +934,8 @@ class ASTTransformer:
                                 'GLSL_step', 'GLSL_smoothstep', 'GLSL_pow', 'GLSL_mod'] and arguments:
             arg_type = self._get_type_name(arguments[0])
             if arg_type:
-                return TYPE_NAME_MAP.get(arg_type)
+                return TYPE_NAME_MAP.get(
+                    OPENCL_TO_GLSL_NAME.get(arg_type, arg_type))
 
         # Functions that return float (scalar reduction functions)
         # length, distance, dot
@@ -754,7 +946,15 @@ class ASTTransformer:
         elif function_name == 'GLSL_modf' and arguments:
             arg_type = self._get_type_name(arguments[0])
             if arg_type:
-                return TYPE_NAME_MAP.get(arg_type)
+                return TYPE_NAME_MAP.get(
+                    OPENCL_TO_GLSL_NAME.get(arg_type, arg_type))
+
+        # Texture sampling builtins return vec4 (resolved by the
+        # textureHelpers.h overloads). Needed so vec3(texture(...)) is
+        # recognized as a truncation (category N).
+        elif function_name in ('texture', 'texelFetch', 'textureLod',
+                               'textureGrad', 'textureProj'):
+            return TYPE_NAME_MAP.get('vec4')
 
         return None
 
@@ -975,6 +1175,25 @@ class ASTTransformer:
 
         location = node.start_point
 
+        # Category K: GLSL array constructor T[N](...) — parses as a call
+        # whose "function" is a subscript expression over the element type
+        # name (float[3], vec2[2], MyStruct[9]). The size is discarded: the
+        # emitter produces a brace list in initializer position and an
+        # unsized compound literal in expression position.
+        if function_node is not None and function_node.type == 'subscript_expression':
+            base_node = None
+            for sub_child in function_node.named_children:
+                if sub_child.type in ('identifier', 'type_identifier', 'primitive_type'):
+                    base_node = sub_child
+                    break
+            if base_node is not None and base_node.text in self.type_map:
+                return IR.ArrayConstructor(
+                    element_type=self.type_map[base_node.text],
+                    arguments=arguments,
+                    glsl_type=None,
+                    source_location=location
+                )
+
         # Check if it's a struct constructor
         if function_name in self.struct_types:
             # This is a struct constructor: Geo(...) -> compound literal { ... }
@@ -997,11 +1216,76 @@ class ASTTransformer:
                     function_name, opencl_type, arguments, location
                 )
 
+            # A single vector-valued argument needs a real conversion or a
+            # swizzle, not a C cast (category N).
+            if len(arguments) == 1:
+                converted = self._transform_vector_conversion_ctor(
+                    function_name, opencl_type, arguments[0], location)
+                if converted is not None:
+                    return converted
+
             # Vector constructors: vec2(...) -> (float2)(...)
             return IR.TypeConstructor(
                 type_name=opencl_type,
                 arguments=arguments,
                 glsl_type=TYPE_NAME_MAP.get(function_name),
+                source_location=location
+            )
+
+        # Bit-cast reinterprets -> OpenCL as_* builtins, size-suffixed by arg
+        # width (category X). These are native OpenCL builtins, so no GLSL_ helper
+        # / Houdini change is needed. uintBitsToFloat/intBitsToFloat -> as_float*,
+        # floatBitsToUint -> as_uint*, floatBitsToInt -> as_int*.
+        bitcast_map = {
+            'uintBitsToFloat': 'as_float', 'intBitsToFloat': 'as_float',
+            'floatBitsToUint': 'as_uint', 'floatBitsToInt': 'as_int',
+        }
+        if function_name in bitcast_map and arguments:
+            return IR.CallExpression(
+                function=bitcast_map[function_name] + self._vector_width_suffix(arguments[0]),
+                arguments=arguments,
+                source_location=location
+            )
+
+        # GLSL component-wise comparison functions -> OpenCL relational operators
+        # (category X). OpenCL has no lessThan()/etc.; the vector relational
+        # operators return per-component int vectors. Guard against a user
+        # function shadowing one of these names.
+        comparison_ops = {
+            'lessThan': '<', 'lessThanEqual': '<=',
+            'greaterThan': '>', 'greaterThanEqual': '>=',
+            'equal': '==', 'notEqual': '!=',
+        }
+        if (function_name in comparison_ops and len(arguments) == 2
+                and function_name not in self.user_function_return_types):
+            # Type the mask so downstream consumers (e.g. the category-N
+            # vector-conversion ctor) know its width.
+            mask_type = self._infer_binary_op_type(
+                comparison_ops[function_name], arguments[0], arguments[1])
+            return IR.ParenthesizedExpression(
+                expression=IR.BinaryOp(
+                    operator=comparison_ops[function_name],
+                    left=arguments[0],
+                    right=arguments[1],
+                    glsl_type=mask_type,
+                    source_location=location
+                ),
+                glsl_type=mask_type,
+                source_location=location
+            )
+
+        # GLSL mix(a, b, m) with a bool-vector mask m is component-wise SELECT
+        # (m[i] ? b[i] : a[i]), not interpolation. OpenCL has no GLSL_mix overload
+        # for an int/bool-vector mask, so emit select(a, b, m). OpenCL `select`
+        # picks b where the mask's sign bit is set, matching our -1-for-true
+        # relational results (and GLSL "pick b where bvec true"). The float-t
+        # interpolation path is left untouched.
+        if (function_name == 'mix' and len(arguments) == 3
+                and function_name not in self.user_function_return_types
+                and self._is_bool_mask(arguments[2])):
+            return IR.CallExpression(
+                function='select',
+                arguments=[arguments[0], arguments[1], arguments[2]],
                 source_location=location
             )
 
@@ -1056,20 +1340,25 @@ class ASTTransformer:
             # Convert to GLSLType object for proper type propagation
             glsl_type = TYPE_NAME_MAP.get(glsl_type_name)
 
-        # Handle output parameters (out/inout) - wrap arguments in address-of (&)
-        # Check if we know the function signature
+        # Handle output parameters (out/inout): the callee wants a pointer.
         if function_name in self.function_signatures:
             param_info = self.function_signatures[function_name]
-            # Wrap arguments that correspond to pointer parameters
             for i, (param_name, is_pointer) in enumerate(param_info):
                 if is_pointer and i < len(arguments):
-                    # Wrap argument in address-of operator
-                    # Only if it's a simple identifier (not already an expression)
-                    if isinstance(arguments[i], IR.Identifier):
+                    arg = arguments[i]
+                    # A pointer param read was auto-deref'd to *p; pass the
+                    # pointer straight through to the callee's pointer param.
+                    if (isinstance(arg, IR.UnaryOp) and arg.operator == '*'
+                            and isinstance(arg.operand, IR.Identifier)
+                            and arg.operand.name in self.pointer_params):
+                        arguments[i] = arg.operand
+                    # A local variable or array element: take its address.
+                    # (Swizzles/MemberAccess are excluded: &v.xy is invalid.)
+                    elif isinstance(arg, (IR.Identifier, IR.ArrayAccess)):
                         arguments[i] = IR.UnaryOp(
                             operator='&',
-                            operand=arguments[i],
-                            source_location=arguments[i].source_location
+                            operand=arg,
+                            source_location=arg.source_location
                         )
 
         # Regular function call
@@ -1188,8 +1477,14 @@ class ASTTransformer:
     def _transform_field_expression(self, node: ASTNode) -> IR.MemberAccess:
         """Transform member access (swizzling, struct field)."""
         # field_expression: base.field
-        base_node = node.named_children[0]
-        field_node = node.named_children[1] if len(node.named_children) > 1 else None
+        # Use field access so an interleaved comment (a named child) can't shift
+        # positional indices and drop the real operand.
+        base_node = node.child_by_field_name('argument')
+        field_node = node.child_by_field_name('field')
+        if base_node is None:
+            operands = [c for c in node.named_children if c.type != "comment"]
+            base_node = operands[0] if operands else None
+            field_node = operands[1] if len(operands) > 1 else None
 
         base = self._transform_node(base_node)
         field = field_node.text if field_node else ""
@@ -1234,8 +1529,13 @@ class ASTTransformer:
     def _transform_subscript_expression(self, node: ASTNode) -> IR.ArrayAccess:
         """Transform array subscript (arr[i])."""
         # subscript_expression: base[index]
-        base_node = node.named_children[0]
-        index_node = node.named_children[1] if len(node.named_children) > 1 else None
+        # Field access avoids comment nodes shifting positional indices.
+        base_node = node.child_by_field_name('argument')
+        index_node = node.child_by_field_name('index')
+        if base_node is None:
+            operands = [c for c in node.named_children if c.type != "comment"]
+            base_node = operands[0] if operands else None
+            index_node = operands[1] if len(operands) > 1 else None
 
         base = self._transform_node(base_node)
         index = self._transform_node(index_node) if index_node else None
@@ -1260,17 +1560,24 @@ class ASTTransformer:
 
     def _transform_conditional_expression(self, node: ASTNode) -> IR.TernaryOp:
         """Transform ternary operator (cond ? a : b)."""
-        # Ternary has 3 named children: condition, true_expr, false_expr
-        children = node.named_children
-        if len(children) != 3:
-            raise TransformationError(
-                "Invalid ternary expression structure",
-                node.start_point
-            )
+        # Ternary fields: condition ? consequence : alternative.
+        # Use field access so interleaved comments don't break the structure.
+        cond_node = node.child_by_field_name('condition')
+        true_node = node.child_by_field_name('consequence')
+        false_node = node.child_by_field_name('alternative')
 
-        condition = self._transform_node(children[0])
-        true_expr = self._transform_node(children[1])
-        false_expr = self._transform_node(children[2])
+        if cond_node is None or true_node is None or false_node is None:
+            children = [c for c in node.named_children if c.type != "comment"]
+            if len(children) != 3:
+                raise TransformationError(
+                    "Invalid ternary expression structure",
+                    node.start_point
+                )
+            cond_node, true_node, false_node = children
+
+        condition = self._transform_node(cond_node)
+        true_expr = self._transform_node(true_node)
+        false_expr = self._transform_node(false_node)
 
         return IR.TernaryOp(
             condition=condition,
@@ -1288,8 +1595,13 @@ class ASTTransformer:
         - Pointer parameter assignments: param = value -> *param = value
         """
         # assignment_expression: target = value or target += value
-        target_node = node.named_children[0]
-        value_node = node.named_children[1] if len(node.named_children) > 1 else None
+        # Field access avoids comment nodes shifting positional indices.
+        target_node = node.child_by_field_name('left')
+        value_node = node.child_by_field_name('right')
+        if target_node is None:
+            operands = [c for c in node.named_children if c.type != "comment"]
+            target_node = operands[0] if operands else None
+            value_node = operands[1] if len(operands) > 1 else None
 
         # Find operator
         operator = '='
@@ -1301,14 +1613,9 @@ class ASTTransformer:
         target = self._transform_node(target_node)
         value = self._transform_node(value_node) if value_node else None
 
-        # Handle assignments to pointer parameters (out/inout)
-        # If target is an identifier that's a pointer parameter, wrap in dereference
-        if isinstance(target, IR.Identifier) and target.name in self.pointer_params:
-            target = IR.UnaryOp(
-                operator='*',
-                operand=target,
-                source_location=target.source_location
-            )
+        # Note: a pointer-param target (p = ..., p.x = ...) is already
+        # dereferenced by _transform_identifier (-> *p / (*p).x), so no extra
+        # wrap is needed here.
 
         # Track field assignments for type inference (e.g., t.matrix = mat2(...))
         if operator == '=' and isinstance(target, IR.MemberAccess) and isinstance(target.base, IR.Identifier):
@@ -1373,10 +1680,22 @@ class ASTTransformer:
                 node.start_point
             )
 
-        # For now, just create a UnaryOp
-        # The code emitter will handle prefix vs postfix
         operand = self._transform_node(operand_node)
 
+        # OpenCL forbids ++/-- on vector types ("cannot increment value of type
+        # 'float4'"). Rewrite a vector ++/-- to a compound assignment that
+        # broadcasts (v++ -> v += 1, v-- -> v -= 1). Scalars keep ++/--.
+        # The emitter already renders all ++/-- as prefix, so this introduces no
+        # new pre/post-fix semantic change for the common statement form.
+        if self._is_vector_type(self._get_type_name(operand)):
+            return IR.AssignmentOp(
+                operator='+=' if operator == '++' else '-=',
+                target=operand,
+                value=IR.IntLiteral(value='1', source_location=node.start_point),
+                source_location=node.start_point
+            )
+
+        # The code emitter will handle prefix vs postfix
         return IR.UnaryOp(
             operator=operator,
             operand=operand,
@@ -1417,10 +1736,11 @@ class ASTTransformer:
         """
         expr_node = node.named_children[0] if node.named_children else None
         if expr_node is None:
-            raise TransformationError(
-                "Empty expression statement",
-                node.start_point
-            )
+            # Empty statement (a bare/stray `;`, e.g. a trailing `;;`). A no-op in
+            # GLSL/C — skip it. The compound-statement and top-level declaration
+            # loops filter None, so the empty statement is simply dropped instead
+            # of aborting the whole transform.
+            return None
 
         # Check for GLSL 'discard' statement -> transform to 'return;'
         # In GLSL fragment shaders, 'discard' terminates fragment processing
@@ -1438,6 +1758,36 @@ class ASTTransformer:
             expression=expr,
             source_location=node.start_point
         )
+
+    def _is_ct_constant(self, node) -> bool:
+        """
+        True if `node` is a compile-time-constant initializer that OpenCL
+        accepts at program (file) scope.
+
+        Verified on the NVIDIA CUDA target: accepted forms are bare literals and
+        pure vector/matrix-literal constructors of constants (recursively),
+        optionally wrapped in unary +/-/!/~ or parentheses. ANY binary
+        arithmetic (`*`, `/`, `+`, ...) or function call makes the initializer
+        "not a compile-time constant" — even under __constant — so those return
+        False and get hoisted into the kernel body.
+
+        Returning True here is conservative (leaves the global in place); we only
+        return True for forms known to compile, so we never under-hoist a form
+        that would fail.
+        """
+        if node is None:
+            return True
+        if isinstance(node, (IR.FloatLiteral, IR.IntLiteral, IR.BoolLiteral)):
+            return True
+        if isinstance(node, IR.ParenthesizedExpression):
+            return self._is_ct_constant(node.expression)
+        if isinstance(node, IR.UnaryOp):
+            return self._is_ct_constant(node.operand)
+        if isinstance(node, (IR.TypeConstructor, IR.ArrayConstructor)):
+            return all(self._is_ct_constant(arg) for arg in (node.arguments or []))
+        # BinaryOp, CallExpression, Identifier, MemberAccess, ArrayAccess,
+        # TernaryOp, ArrayInitializer, ... -> not a program-scope constant.
+        return False
 
     def _transform_declaration(self, node: ASTNode):
         """
@@ -1490,6 +1840,7 @@ class ASTTransformer:
 
         # Transform each declarator into a Declaration node
         declarations = []
+        hoisted_any = False  # category A: any declarator hoisted out of file scope
         for declarator in declarators:
             var_name = None
             base_name = None
@@ -1533,6 +1884,24 @@ class ASTTransformer:
             initializer = None
             if initializer_node:
                 initializer = self._transform_node(initializer_node)
+
+                # Category A — hoist a non-constant program-scope initializer.
+                # OpenCL rejects any arithmetic/call in a file-scope initializer
+                # ("initializer element is not a compile-time constant"), even
+                # with __constant. Emit the global bare (mutable, default-zero)
+                # and record the real initializer; the host (tests/transpile.py /
+                # Houdini @KERNEL) assigns it at the top of the kernel body, the
+                # same pattern main_header.cl uses for `static float iTime`.
+                # Skips: array globals (whole-array assignment is illegal) and
+                # scalar int/uint globals (array-size/loop-bound candidates whose
+                # integer constant expressions OpenCL already folds).
+                if (self._global_scope
+                        and '[' not in var_name
+                        and opencl_type not in ('int', 'uint')
+                        and not self._is_ct_constant(initializer)):
+                    self.hoisted_global_inits.append((var_name, initializer))
+                    initializer = None  # bare declaration; assigned in the kernel
+                    hoisted_any = True
             else:
                 # No explicit initializer - create zero initializer to match GLSL semantics
                 # GLSL implicitly initializes undefined variables to zero, while OpenCL
@@ -1556,6 +1925,12 @@ class ASTTransformer:
                 qualifiers=[],  # Qualifiers will be set at DeclarationList level
                 source_location=declarator.start_point
             ))
+
+        # A hoisted global is assigned in the kernel body, so it must not be
+        # `const` (assignment to a const is an error). Drop const for the whole
+        # statement when any declarator was hoisted.
+        if hoisted_any:
+            qualifiers = [q for q in qualifiers if q != 'const']
 
         # Return single Declaration or DeclarationList
         if len(declarations) == 1:
@@ -1811,8 +2186,11 @@ class ASTTransformer:
                 # Add parameter to local type environment for matrix operation detection
                 self.local_types[param.name] = param.type_name
 
-                # Track pointer parameters (for dereference handling in function body)
-                if param.is_pointer:
+                # Track pointer parameters (for dereference handling in function
+                # body). The renderpass ENTRY function's out-param (fragColor) is
+                # a host-provided @KERNEL local, not a deref'able pointer, so it
+                # is excluded here (a helper that merely shares the name is not).
+                if param.is_pointer and func_name != self.entry_function:
                     self.pointer_params.add(param.name)
 
                 # Store parameter info for function signature registry
@@ -1821,17 +2199,31 @@ class ASTTransformer:
         # Register function signature for call site handling
         self.function_signatures[func_name] = param_info
 
-        # Transform body
+        # Transform body. Declarations inside a function body are local scope,
+        # not program scope, so global-init hoisting must not apply to them.
+        prev_global_scope = self._global_scope
+        self._global_scope = False
         body = self._transform_node(body_node)
+        self._global_scope = prev_global_scope
 
         # Clear pointer params after transformation
         self.pointer_params.clear()
+
+        # OpenCL C has no overloading: mark user functions overloadable so
+        # same-named GLSL functions of different signatures coexist. Shadertoy
+        # renderpass ENTRY points must stay unmarked: a host strips their
+        # signature and replaces it with a kernel wrapper (tests/transpile.py
+        # re-wraps mainImage; Houdini replaces the signature with @KERNEL), which
+        # would leave `__attribute__((overloadable))` dangling before the kernel.
+        entry_points = {'mainImage', 'mainCubemap', 'mainSound', 'mainVR'}
+        overloadable = func_name not in entry_points
 
         return IR.FunctionDefinition(
             return_type=return_type,
             name=func_name,
             parameters=parameters,
             body=body,
+            overloadable=overloadable,
             source_location=node.start_point
         )
 
@@ -1867,6 +2259,17 @@ class ASTTransformer:
 
         param_name = declarator.text if declarator.type == 'identifier' else ""
 
+        # Array parameter (category K): vec3 pts[4] — keep the name and the
+        # bracket suffix. Arrays already have reference semantics in C, so
+        # out/inout array params skip the pointer machinery entirely: the
+        # body indexes the name directly and call sites pass the array name.
+        array_suffix = None
+        if declarator.type == 'array_declarator':
+            base_declarator = declarator.child_by_field_name('declarator')
+            if base_declarator is not None:
+                param_name = base_declarator.text
+                array_suffix = declarator.text[len(param_name):].strip()
+
         # Extract GLSL qualifiers (in, out, inout, const)
         glsl_qualifiers = []
         for child in node.children:
@@ -1880,15 +2283,17 @@ class ASTTransformer:
         # Check if this is an output parameter (out or inout)
         is_output_param = 'out' in glsl_qualifiers or 'inout' in glsl_qualifiers
 
-        if is_output_param:
+        if is_output_param and array_suffix is None:
             # Output parameters use __private address space
             opencl_qualifiers.append('__private')
 
             # All output parameters need explicit pointers
             is_pointer = True
 
-        # Keep const qualifier if present
-        if 'const' in glsl_qualifiers and not is_output_param:
+        # Keep const qualifier if present (unless the mapped type already
+        # carries one, e.g. `const sampler2D` -> `const IMX_Layer*`).
+        if ('const' in glsl_qualifiers and not is_output_param
+                and not param_type.startswith('const ')):
             opencl_qualifiers.append('const')
 
         # Note: 'in' qualifier is removed (it's the default in C/OpenCL)
@@ -1898,6 +2303,7 @@ class ASTTransformer:
             name=param_name,
             qualifiers=opencl_qualifiers,
             is_pointer=is_pointer,
+            array_suffix=array_suffix,
             source_location=node.start_point
         )
 
@@ -1960,7 +2366,8 @@ class ASTTransformer:
 
             # Extract field type and names
             field_type_node = None
-            field_names = []
+            field_names = []       # as emitted, may carry an array suffix
+            field_base_names = []  # registry keys (suffix stripped)
 
             for child in field_decl.named_children:
                 # Field type can be either 'primitive_type' (float, int) or 'type_identifier' (vec3, custom types)
@@ -1968,6 +2375,16 @@ class ASTTransformer:
                     field_type_node = child
                 elif child.type == 'field_identifier':
                     field_names.append(child.text)
+                    field_base_names.append(child.text)
+                elif child.type == 'array_declarator':
+                    # Array field (category K): vec4 data[4]; — emit the name
+                    # with its bracket suffix, register the base name with the
+                    # element type (mirrors how local array declarations are
+                    # tracked in local_types).
+                    base = child.child_by_field_name('declarator')
+                    if base is not None:
+                        field_names.append(child.text)
+                        field_base_names.append(base.text)
 
             if not field_type_node:
                 raise TransformationError(
@@ -1993,7 +2410,7 @@ class ASTTransformer:
             ))
 
             # Register field types for member access inference
-            for field_name in field_names:
+            for field_name in field_base_names:
                 field_info[field_name] = glsl_type
 
         # Register struct type in our registry

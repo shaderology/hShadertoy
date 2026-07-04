@@ -2,7 +2,7 @@ import hou, json, os
 
 _SKIP_PARMS = {"generatedcode"}  # optional: skip noisy auto-generated parms
 INCLUDE_EXTERNAL_CONNECTIONS = False  # set True to store edges to non-selected nodes too
-SKIP_DEFAULTS = True
+SKIP_DEFAULTS = False
 
 def run(_kwargs=None):
     sel = hou.selectedNodes()

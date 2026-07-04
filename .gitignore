@@ -7,9 +7,11 @@
 !src/
 !tests/
 !houdini/
+!.claude/
 
 # Allow root README
 !README.md
+!CLAUDE.md
 !pytest.ini
 !requirements.txt
 

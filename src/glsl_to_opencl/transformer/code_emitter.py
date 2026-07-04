@@ -19,6 +19,18 @@ from typing import List
 from . import transformed_ast as IR
 
 
+# TypeConstructor type names that use OpenCL cast syntax (T)(args). Anything
+# else is a user struct constructor (brace list / compound literal) — except
+# the legacy GLSL matrix names, which keep their historical brace emission.
+STANDARD_CTOR_TYPES = {
+    'float', 'float2', 'float3', 'float4',
+    'int', 'int2', 'int3', 'int4',
+    'uint', 'uint2', 'uint3', 'uint4',
+    'matrix2x2', 'matrix3x3', 'matrix4x4'
+}
+MATRIX_CTOR_TYPES = {'mat2', 'mat3', 'mat4'}
+
+
 class CodeEmitter:
     """
     Emits OpenCL C code from transformed AST.
@@ -131,37 +143,53 @@ class CodeEmitter:
         - mat3 full constructor: { (float3)(...), (float3)(...), (float3)(...) }
         - Vector constructors: Use cast syntax (float2)(arg1, arg2)
         """
-        # Check if this is a struct constructor (type_name not in standard type_map)
-        # Struct types don't use cast syntax, they use compound literal syntax
-        standard_types = {
-            'float', 'float2', 'float3', 'float4',
-            'int', 'int2', 'int3', 'int4',
-            'uint', 'uint2', 'uint3', 'uint4',
-            'matrix2x2', 'matrix3x3', 'matrix4x4'
-        }
+        # Struct constructors: C99 compound literal ((S){args}) — valid in
+        # every expression position. Declaration initializers instead go
+        # through _emit_initializer, which keeps the plain brace list.
+        if self._is_struct_ctor(node):
+            return f"(({node.type_name}){self._braced_args(node.arguments)})"
 
-        if node.type_name not in standard_types:
-            # This is likely a struct constructor
-            # Emit as compound literal: { arg1, arg2, arg3 }
+        # Legacy matrix brace path (matrices are struct/array types).
+        if node.type_name in MATRIX_CTOR_TYPES:
             args = ', '.join(self.emit(arg) for arg in node.arguments)
             return f"{{{args}}}"
-
-        # mat3 full constructor: { (float3)(...), (float3)(...), (float3)(...) }
-        # Note: mat3 is an array type, so use array initialization syntax
-        if node.type_name == 'mat3' and len(node.arguments) == 3:
-            # Check if all arguments are float3 constructors
-            all_float3 = all(
-                isinstance(arg, IR.TypeConstructor) and arg.type_name == 'float3'
-                for arg in node.arguments
-            )
-            if all_float3:
-                # Emit array initialization syntax (single braces)
-                cols = ', '.join(self.emit(arg) for arg in node.arguments)
-                return f"{{{cols}}}"
 
         # Standard cast syntax for vectors and standard types
         args = ', '.join(self.emit(arg) for arg in node.arguments)
         return f"({node.type_name})({args})"
+
+    def _is_struct_ctor(self, node) -> bool:
+        """True for TypeConstructors of user struct types (category K)."""
+        return (isinstance(node, IR.TypeConstructor)
+                and node.type_name not in STANDARD_CTOR_TYPES
+                and node.type_name not in MATRIX_CTOR_TYPES)
+
+    def _braced_args(self, args) -> str:
+        """Emit constructor arguments as a brace list; nested aggregate
+        constructors (arrays / structs) recurse into nested brace lists,
+        as C initializer syntax requires."""
+        return '{' + ', '.join(self._init_item(a) for a in (args or [])) + '}'
+
+    def _init_item(self, node) -> str:
+        if isinstance(node, IR.ArrayConstructor) or self._is_struct_ctor(node):
+            return self._braced_args(node.arguments)
+        return self.emit(node)
+
+    def _emit_initializer(self, node) -> str:
+        """Emit a declaration initializer. Aggregate constructors (array or
+        struct) become plain brace lists — the only form valid for array
+        declarations in C, and the pre-existing form for struct ones."""
+        if isinstance(node, IR.ArrayConstructor) or self._is_struct_ctor(node):
+            return self._braced_args(node.arguments)
+        return self.emit(node)
+
+    def emit_ArrayConstructor(self, node: IR.ArrayConstructor) -> str:
+        """
+        Emit a GLSL array constructor in expression position as an unsized
+        compound literal: float[4](a, b, c, d) -> ((float[]){a, b, c, d}).
+        (Declaration initializers go through _emit_initializer instead.)
+        """
+        return f"(({node.element_type}[]){self._braced_args(node.arguments)})"
 
     def emit_ArrayInitializer(self, node: IR.ArrayInitializer) -> str:
         """
@@ -248,7 +276,7 @@ class CodeEmitter:
         qualifier_str = ' '.join(node.qualifiers) + ' ' if node.qualifiers else ''
         result = f"{self.indent()}{qualifier_str}{node.type_name} {node.name}"
         if node.initializer:
-            init = self.emit(node.initializer)
+            init = self._emit_initializer(node.initializer)
             result += f" = {init}"
         result += ";\n"
         return result
@@ -286,7 +314,7 @@ class CodeEmitter:
         for decl in node.declarators:
             part = decl.name
             if decl.initializer:
-                init = self.emit(decl.initializer)
+                init = self._emit_initializer(decl.initializer)
                 part += f" = {init}"
             declarator_parts.append(part)
 
@@ -506,8 +534,11 @@ class CodeEmitter:
         else:
             parts.append(node.type_name)
 
-        # Name
-        parts.append(node.name)
+        # Name (array params carry their bracket suffix: float3 pts[4])
+        if node.array_suffix:
+            parts.append(node.name + node.array_suffix)
+        else:
+            parts.append(node.name)
 
         return ' '.join(parts)
 
@@ -516,6 +547,11 @@ class CodeEmitter:
         # Signature
         params = ', '.join(self.emit(p) for p in node.parameters)
         result = f"{node.return_type} {node.name}({params}) "
+
+        # OpenCL C has no overloading; user functions are marked overloadable so
+        # same-named GLSL functions of different signatures compile.
+        if node.overloadable:
+            result = "__attribute__((overloadable))\n" + result
 
         # Body
         body = self.emit(node.body)

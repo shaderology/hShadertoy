@@ -102,6 +102,17 @@ float4 __attribute__((overloadable)) texture(const IMX_Layer* layer, float3 uvw)
     }
 }
 
+// 3-arg texture() with the GLSL optional bias/LOD term: texture(sampler, P, bias).
+// Houdini COPs have no mipmaps, so the bias/LOD is a no-op (sample as 2-arg).
+// Common Shadertoy idiom: texture(iChannel0, uv, -100.0) to force the base level.
+float4 __attribute__((overloadable)) texture(const IMX_Layer* layer, float2 uv, float bias){
+    return sampler2D(layer, uv);
+}
+
+float4 __attribute__((overloadable)) texture(const IMX_Layer* layer, float3 uvw, float bias){
+    return texture(layer, uvw);  // typeinfo dispatch (2-arg float3 overload)
+}
+
 // textureSize() - Get texture dimensions
 int2 __attribute__((overloadable)) textureSize(const IMX_Layer* layer, int lod)
 {

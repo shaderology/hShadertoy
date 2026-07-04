@@ -343,14 +343,13 @@ Kernel source construction order:
                 print(f"  • {kname}")
         print()
         
-    except cl.BuildError as e:
+    except cl.RuntimeError as e:
+        # pyopencl has no BuildError; build failures raise cl.RuntimeError
+        # (BUILD_PROGRAM_FAILURE) with the device build log in the message.
         print("Build failed!\n")
         print("=" * 70)
-        for dev, log in e.logs:
-            print(f"Build log for device: {dev.name}")
-            print("=" * 70)
-            print(log)
-            print("=" * 70)
+        print(str(e))
+        print("=" * 70)
         sys.exit(1)
 
 

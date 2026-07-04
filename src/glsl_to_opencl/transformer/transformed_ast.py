@@ -202,6 +202,21 @@ class TypeConstructor(TransformedNode):
 
 
 @dataclass(frozen=True)
+class ArrayConstructor(TransformedNode):
+    """
+    GLSL array constructor rvalue: float[3](a, b, c) / vec2[](...).
+
+    Category K: parses as a call whose function is a subscript over the
+    element type name. The declared size is discarded — emission never needs
+    it: in declaration-initializer position the emitter produces a brace list
+    {a, b, c} (the declarator carries the size), and in expression position
+    an unsized compound literal ((float[]){a, b, c}).
+    """
+    element_type: str = None  # OpenCL element type name (float, float2, struct name)
+    arguments: List[TransformedNode] = None
+
+
+@dataclass(frozen=True)
 class ArrayInitializer(TransformedNode):
     """
     Array initializer with curly braces.
@@ -446,6 +461,9 @@ class Parameter(TransformedNode):
     qualifiers: List[str] = None  # ["const", "__global", etc.]
     is_pointer: bool = False  # True for out/inout parameters (except mat3)
     is_result_param: bool = False  # True if synthetic out-param for mat3 return
+    array_suffix: str = None  # "[4]" for array params (vec3 pts[4]); arrays
+    # already have reference semantics, so out/inout array params are NOT
+    # marked is_pointer and call sites pass the array name directly.
 
     def __post_init__(self):
         # Ensure qualifiers is a list
@@ -461,11 +479,16 @@ class FunctionDefinition(TransformedNode):
     Examples:
         void compute(float x) { ... }
         float3 transform(float3 v) { ... }
+
+    OpenCL C has no function overloading, so user functions are emitted with
+    __attribute__((overloadable)) to let same-named GLSL functions of different
+    signatures coexist. mainImage (the kernel entry point) is left unmarked.
     """
     return_type: str = None  # OpenCL type name
     name: str = None
     parameters: List[Parameter] = None
     body: CompoundStatement = None
+    overloadable: bool = False  # Emit __attribute__((overloadable)) before signature
 
 
 # ============================================================================
