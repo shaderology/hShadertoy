@@ -5,6 +5,7 @@
 
 # Allow these top-level folders
 !src/
+!docs/
 !tests/
 !houdini/
 !.claude/
