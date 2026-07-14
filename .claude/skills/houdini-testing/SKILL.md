@@ -11,7 +11,7 @@ edit it**. Everything else here is testable by you, without the Houdini GUI.
 > **Never used Houdini?** Read the Glossary at the bottom of this file FIRST —
 > the rest of this skill uses COP/HDA/`#bind`/IMX_Layer/VEX freely.
 
-## The three test levels (cheapest first)
+## The test levels (cheapest first)
 
 ### Level 0 — no Houdini at all: `tests/compilecl.py` (pyopencl)
 ```bash
@@ -41,7 +41,31 @@ HSHADERTOY_ROOT="C:/dev/hShadertoy" \
   HDA parm population. Does **NOT** compile OpenCL (the cook is commented out
   in `builder.py`). Success prints `SUCCESS!`; failure = traceback, exit 1.
 
-### Level 2 — real Houdini OpenCL compile + execution: `template_load_headless.py`
+### Level 2 — HDA build + real cook: `builder_cook_headless.py` (PREFERRED)
+```bash
+python tests/fixcampaign/houdini_smoke.py    # one-command wrapper, exit code is the verdict
+# or directly:
+HSHADERTOY_ROOT="C:/dev/hShadertoy" HOUDINI_OCL_PATH="C:/dev/hShadertoy/houdini/ocl;&" \
+hython houdini/scripts/python/hshadertoy/tests/builder_cook_headless.py \
+  "C:/dev/hShadertoy/resources/examples/BuffersAndTextures/BuffersAndTextures_API.json" Transpile
+```
+- Same API-shaped input as Level 1, but after building it runs
+  `hou.node().cook(force=True)` on the HDA node — Houdini compiles AND executes
+  the OpenCL of every enabled renderpass (incl. cubemap/Common paths the
+  campaign never sees). Collects `errors()` from the HDA + all subchildren and
+  exits non-zero on any (verified both directions 2026-07-05).
+- **CRITICAL — `HOUDINI_OCL_PATH` must end in `;&`.** The `&` expands to
+  Houdini's default OCL search path. Setting the var WITHOUT it removes the
+  built-in headers (`imx.h`, `interpolate.h`, …) and the APEX-implemented COPs
+  inside the HDA then **SEGFAULT hython** (UT_Lock in `CE_SnippetCacheEntry::
+  lookupCode`) instead of erroring. Every `#import`-cannot-be-found or
+  seg-fault-on-cook headless: check this first.
+- Run via Bash `run_in_background` with timeout 600000; never pipe through
+  `tail` (the pipe eats the exit code).
+- Wired into the fix campaign as the mandatory post-corpus step
+  (`tests/fixcampaign/README.md` step 8).
+
+### Level 2b — template-shaped cook: `template_load_headless.py`
 ```bash
 hython houdini/scripts/python/hshadertoy/tests/template_load_headless.py \
   --cook opencl "resources/examples/BuffersAndTextures/BuffersAndTextures_HDA.json"
@@ -50,8 +74,11 @@ hython houdini/scripts/python/hshadertoy/tests/template_load_headless.py \
   exported via `houdini/scripts/python/hshadertoy/tools/template_save.py` —
   NOT the API shape.
 - `--cook opencl` force-cooks the OpenCL COPs = Houdini actually compiles and
-  runs the kernels. The cook needs `HOUDINI_OCL_PATH=<repo>/houdini/ocl` set
-  (package env) to resolve the `#include`s.
+  runs the kernels. The cook needs `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&` set
+  (note the `;&` — see Level 2 warning) to resolve the `#include`s.
+- NOTE: the template JSON carries *frozen pre-transpiled* code in its parms —
+  it does NOT exercise the current transpiler. For transpiler validation use
+  Level 2 above.
 - **KNOWN BUG (roadmap quick-win):** the script collects cook errors but never
   prints them and always exits 0 — its "success" summary prints *before*
   cooking. Until fixed, check hython stderr and query `node.errors()` yourself;

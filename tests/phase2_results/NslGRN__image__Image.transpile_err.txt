@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "C:\dev\hShadertoy\tests\transpile.py", line 167, in extract_main_image_sections
+    ast = parser.parse(glsl_source)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\parser\glsl_parser.py", line 52, in parse
+    raise ParseError(
+src.glsl_to_opencl.parser.errors.ParseError: ParseError(line 437, col 13): Syntax error at line 437, column 13
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\dev\hShadertoy\tests\phase2_test.py", line 58, in main
+    result = transpile(glsl)
+             ^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\tests\transpile.py", line 273, in transpile
+    header_glsl, kernel_glsl_body = extract_main_image_sections(glsl_source, parser)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\tests\transpile.py", line 169, in extract_main_image_sections
+    raise TranspileError(f"Failed to parse GLSL: {e}")
+tests.transpile.TranspileError: Failed to parse GLSL: ParseError(line 437, col 13): Syntax error at line 437, column 13

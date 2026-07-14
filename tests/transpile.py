@@ -52,8 +52,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.glsl_to_opencl.parser import GLSLParser
 from src.glsl_to_opencl.analyzer import TypeChecker, create_builtin_symbol_table
 from src.glsl_to_opencl.transformer.ast_transformer import ASTTransformer
+from src.glsl_to_opencl.transformer import transformed_ast as IR
 from src.glsl_to_opencl.codegen.opencl_emitter import OpenCLEmitter
-from src.glsl_to_opencl.preprocessor import PreprocessorTransformer
+from src.glsl_to_opencl.preprocessor import (
+    PreprocessorTransformer,
+    append_uniform_undefs,
+    collect_uniform_redefines,
+    uniform_redefine_prefix,
+)
 
 
 @dataclass
@@ -148,104 +154,142 @@ def post_process_ifdef_blocks(opencl_code: str) -> str:
     return opencl_code
 
 
-def extract_main_image_sections(glsl_source: str, parser: GLSLParser) -> Tuple[str, str, str, str]:
+def normalize_entry_point(glsl_source: str) -> str:
     """
-    Extract sections before and inside mainImage() using AST.
+    Rewrite unconventional Shadertoy entry idioms into a standard
+    `void mainImage(out vec4 fragColor, in vec2 fragCoord)` shader (S2 of
+    docs/handover/ENTRYPOINT_REDESIGN.md).
 
-    Args:
-        glsl_source: Original GLSL source code
-        parser: GLSLParser instance
+    Shadertoy never scans user code for mainImage — its GL header
+    forward-declares it, main() calls it, and the REAL GL preprocessor
+    expands user macros. Two idioms therefore compile on the site without a
+    literal mainImage definition:
+
+    (a) macro-entry: `#define main() mainImage(out vec4 fragColor, vec2
+        fragCoord)` (+ `#define gl_FragCoord fragCoord`), then
+        `void main() {...}` — expand those entry-related defines and drop
+        them (our preprocessor pass never expands macros).
+    (b) bare `void main(void)` using gl_FragColor/gl_FragCoord (GLSL-Sandbox
+        ports) — rewrite the signature, map gl_FragColor to the out param,
+        and provide gl_FragCoord as a global (it is referenceable from
+        helper functions in GLSL) initialized at the top of the entry body.
+
+    Shaders that already define mainImage are returned unchanged.
+    """
+    if re.search(r'\bvoid\s+mainImage\s*\(', glsl_source):
+        return glsl_source
+
+    src = glsl_source
+
+    # --- idiom (a): #define main() <replacement containing mainImage> ------
+    m = re.search(
+        r'^[ \t]*#[ \t]*define[ \t]+main[ \t]*\([ \t]*\)[ \t]+(.*\bmainImage\b.*)$',
+        src, re.MULTILINE)
+    if m:
+        replacement = m.group(1).strip()
+        src = src[:m.start()] + src[m.end():]          # drop the define
+        src = re.sub(r'\bmain[ \t]*\([ \t]*\)', replacement, src)
+
+        # Expand gl_* object macros the site's preprocessor would resolve
+        # (e.g. `#define gl_FragCoord fragCoord`); other user defines are
+        # left for the normal preprocessor path.
+        for gl_name in ('gl_FragCoord', 'gl_FragColor'):
+            dm = re.search(
+                r'^[ \t]*#[ \t]*define[ \t]+' + gl_name + r'[ \t]+(\S+)[ \t]*$',
+                src, re.MULTILINE)
+            if dm:
+                alias = dm.group(1)
+                src = src[:dm.start()] + src[dm.end():]
+                src = re.sub(r'\b' + gl_name + r'\b', alias, src)
+        return src
+
+    # --- idiom (b): bare void main(void?) -----------------------------------
+    sig = re.search(r'\bvoid\s+main\s*\(\s*(?:void)?\s*\)', src)
+    if not sig:
+        return glsl_source  # nothing we recognize; let transpile() report
+
+    src = (src[:sig.start()]
+           + "void mainImage(out vec4 fragColor, in vec2 fragCoord)"
+           + src[sig.end():])
+    src = re.sub(r'\bgl_FragColor\b', 'fragColor', src)
+
+    if re.search(r'\bgl_FragCoord\b', src):
+        # gl_FragCoord is a global in GLSL (helpers may read it): declare it
+        # at file scope and set it first thing in the entry body. z/w use
+        # nominal fragment values (z is depth — meaningless for Shadertoy).
+        body_open = re.search(
+            r'void\s+mainImage\s*\([^)]*\)\s*\{', src)
+        insert_at = body_open.end()
+        src = ("vec4 gl_FragCoord;\n"
+               + src[:insert_at]
+               + "\n    gl_FragCoord = vec4(fragCoord, 0.0, 1.0);"
+               + src[insert_at:])
+    return src
+
+
+def partition_translation_unit(ir: "IR.TranslationUnit") -> Tuple["IR.FunctionDefinition", list]:
+    """
+    Split the transformed translation unit into the entry function and the
+    header declarations (single-TU entry-point model — see
+    docs/handover/ENTRYPOINT_REDESIGN.md).
+
+    Code AFTER mainImage is kept in the header too (category S):
+    prototype-style shaders declare `float Fn (float x);` at the top, call it
+    from mainImage, and define it at the bottom of the file — dropping
+    post-mainImage code left those prototypes unresolved.
+    Alternate Shadertoy entry points (mainVR/mainSound/mainCubemap) are
+    excluded ONLY when they come after mainImage (they were never part of
+    the emitted header there). Before mainImage they must stay included:
+    some shaders (XlBGzm, lsVBDh, XscXzn) define mainVR first and CALL it
+    from mainImage.
+
+    When several mainImage definitions exist, the LAST one wins (matching the
+    pre-restructure text-split behavior); all of them stay out of the header.
 
     Returns:
-        Tuple of (code_before_main, main_image_body, out_name, in_name).
-        out_name/in_name are the user's mainImage parameter names (Shadertoy
-        allows custom names, e.g. `out vec4 O, vec2 U`); they default to
-        "fragColor"/"fragCoord" when the standard names are used or absent.
+        Tuple of (entry_function_ir, header_declarations)
 
     Raises:
-        TranspileError: If mainImage() not found
+        TranspileError: If no mainImage() definition is found
     """
-    # Parse the source to get AST
-    try:
-        ast = parser.parse(glsl_source)
-    except Exception as e:
-        raise TranspileError(f"Failed to parse GLSL: {e}")
+    alternate_entry_points = {"mainVR", "mainSound", "mainCubemap"}
 
-    # Find mainImage function in AST
-    main_image_node = None
-    declarations_before_main = []
+    entry_ir = None
+    header_declarations = []
 
-    for node in ast.named_children:
-        if node.type == "function_definition":
-            # Check if this is mainImage
-            func_name = node.name if hasattr(node, 'name') else None
-            if not func_name:
-                # Try to extract from declarator
-                declarator = node.child_by_field_name("declarator")
-                if declarator:
-                    for child in declarator.children:
-                        if child.type == "identifier":
-                            func_name = child.text
-                            break
-
-            if func_name == "mainImage":
-                main_image_node = node
-                break
-            else:
-                declarations_before_main.append(node)
+    for decl in ir.declarations:
+        is_definition = (
+            isinstance(decl, IR.FunctionDefinition)
+            and not getattr(decl, 'is_prototype', False)
+        )
+        if is_definition and decl.name == "mainImage":
+            entry_ir = decl  # last definition wins
+        elif (is_definition and entry_ir is not None
+              and decl.name in alternate_entry_points):
+            continue
         else:
-            # Not a function definition (global var, struct, etc.)
-            declarations_before_main.append(node)
+            header_declarations.append(decl)
 
-    if not main_image_node:
+    if entry_ir is None:
         raise TranspileError("Could not find mainImage() function in GLSL source")
 
-    # Extract code before mainImage
-    code_before_main = ""
-    for decl_node in declarations_before_main:
-        # Use .text property from ASTNode
-        node_text = decl_node.text
+    return entry_ir, header_declarations
 
-        # Special handling for struct_specifier: tree-sitter doesn't include
-        # the trailing semicolon in the node text, but GLSL syntax requires it
-        if decl_node.type == "struct_specifier":
-            node_text += ";"
 
-        code_before_main += node_text + "\n\n"
-
-    code_before_main = code_before_main.strip()
-
-    # Extract mainImage body (without signature and braces)
-    body_node = main_image_node.child_by_field_name("body")
-    if not body_node:
-        raise TranspileError("mainImage() function has no body")
-
-    # Get body text using .text property
-    body_text = body_node.text
-
-    # Remove outer braces
-    body_text = body_text.strip()
-    if body_text.startswith("{") and body_text.endswith("}"):
-        body_text = body_text[1:-1]
-
-    main_image_body = body_text.strip()
-
-    # Capture the user's mainImage parameter names. Shadertoy permits custom
-    # names (golf shaders frequently use `out vec4 O, vec2 U`), but the Houdini
-    # kernel always exposes `fragColor`/`fragCoord`. transpile() bridges the gap
-    # via alias injection rather than renaming identifiers in the body.
+def entry_param_names(entry_ir: "IR.FunctionDefinition") -> Tuple[str, str]:
+    """
+    The user's mainImage parameter names. Shadertoy permits custom names
+    (golf shaders frequently use `out vec4 O, vec2 U`), but the Houdini
+    kernel always exposes `fragColor`/`fragCoord`. transpile() bridges the
+    gap via alias injection rather than renaming identifiers in the body.
+    """
     out_name, in_name = "fragColor", "fragCoord"
-    params = main_image_node.parameters
-    if len(params) >= 1:
-        decl = params[0].child_by_field_name("declarator")
-        if decl is not None and decl.type == "identifier" and decl.text:
-            out_name = decl.text.strip()
-    if len(params) >= 2:
-        decl = params[1].child_by_field_name("declarator")
-        if decl is not None and decl.type == "identifier" and decl.text:
-            in_name = decl.text.strip()
-
-    return code_before_main, main_image_body, out_name, in_name
+    params = entry_ir.parameters or []
+    if len(params) >= 1 and params[0].name:
+        out_name = params[0].name
+    if len(params) >= 2 and params[1].name:
+        in_name = params[1].name
+    return out_name, in_name
 
 
 def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> TranspileResult:
@@ -281,33 +325,33 @@ def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> Tran
         if verbose:
             print(f"  [OK] Prepended Common tab ({len(common)} chars)")
 
+    # Stage -0.5: Normalize unconventional entry idioms (macro-entry,
+    # bare void main() + gl_* — see normalize_entry_point docstring).
+    glsl_source = normalize_entry_point(glsl_source)
+
     # Stage 0: Transform preprocessor directives
     if verbose:
         print("\n[0/6] Transforming preprocessor directives...")
 
     preprocessor = PreprocessorTransformer()
+    glsl_raw = glsl_source  # pre-preprocessor text; keeps user #undef lines (AG)
     glsl_source = preprocessor.transform(glsl_source)
 
     if verbose:
         print(f"  [OK] Preprocessor transformation complete")
 
-    # Stage 1: Parse GLSL
+    # Stage 1: Parse GLSL — ONE parse of the whole merged source (single-TU
+    # entry-point model, docs/handover/ENTRYPOINT_REDESIGN.md). The old
+    # pipeline text-split around mainImage and re-parsed each half (plus the
+    # emitted OpenCL a fourth time); the split now happens on transformed IR.
     if verbose:
         print("\n[1/6] Parsing GLSL source...")
 
     parser = GLSLParser()
-
-    # Extract sections BEFORE transformation
     try:
-        header_glsl, kernel_glsl_body, out_name, in_name = extract_main_image_sections(glsl_source, parser)
-    except TranspileError as e:
-        raise
+        ast = parser.parse(glsl_source)
     except Exception as e:
-        raise TranspileError(f"Failed to extract mainImage sections: {e}")
-
-    if verbose:
-        print(f"  [OK] Found {len(header_glsl)} chars before mainImage()")
-        print(f"  [OK] Found {len(kernel_glsl_body)} chars in mainImage() body")
+        raise TranspileError(f"Failed to parse GLSL: {e}")
 
     # Stage 2: Setup type checker
     if verbose:
@@ -325,114 +369,101 @@ def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> Tran
 
     transformer = ASTTransformer(type_checker)
 
+    # Seed matrix-returning #define macros (category J) as user-function
+    # return types so `p *= rot(a)` (rot a matrix macro) dispatches through
+    # the matmul helper instead of emitting a raw `float2 *= matrix2x2`. A
+    # later real definition of the same name overwrites this during transform.
+    transformer.user_function_return_types.update(preprocessor.matrix_macros)
+
     if verbose:
         print(f"  [OK] Transformer initialized")
 
-    # Stage 4: Transform header (code before mainImage)
+    # Stage 4: Transform the whole translation unit in source order (exactly
+    # what GLSL's own compiler sees; prototypes pre-register signatures for
+    # call sites that precede definitions), then split entry vs header on IR.
     if verbose:
-        print("\n[4/6] Transforming code sections...")
-        if header_glsl:
-            print("  -> Transforming header (globals/functions)...")
+        print("\n[4/6] Transforming translation unit...")
+
+    try:
+        ir = transformer.transform(ast)
+    except Exception as e:
+        raise TranspileError(f"Failed to transform GLSL: {e}")
 
     # Category A — program-scope globals whose initializer is not a compile-time
     # constant are emitted bare by the transformer; their real initializers are
     # collected here and assigned at the top of the kernel body below.
-    hoisted_global_inits = []
+    hoisted_global_inits = list(transformer.hoisted_global_inits)
+
+    entry_ir, header_decls = partition_translation_unit(ir)
+    out_name, in_name = entry_param_names(entry_ir)
+
     header_opencl = ""
-    if header_glsl:
+    ag_redefines = {}
+    if header_decls:
         try:
-            # Check if header is only preprocessor directives and comments
-            # Preprocessor directives are already transformed, so we can pass them through
-            # This avoids the issue where tree-sitter rejects preprocessor-only code
-            is_preprocessor_only = all(
-                line.strip().startswith('#') or
-                line.strip().startswith('//') or
-                not line.strip()
-                for line in header_glsl.split('\n')
+            emitter = OpenCLEmitter(indent_size=4)
+            header_opencl = emitter.emit(
+                IR.TranslationUnit(declarations=header_decls)
             )
-
-            if is_preprocessor_only:
-                # Header contains only preprocessor directives, pass through as-is
-                header_opencl = header_glsl
-            else:
-                # Header contains actual code, parse and transform normally
-                header_ast = parser.parse(header_glsl)
-                header_ir = transformer.transform(header_ast)
-                # Capture hoisted global initializers before the kernel pass
-                # (transform() resets the list on each call).
-                hoisted_global_inits = list(transformer.hoisted_global_inits)
-                emitter = OpenCLEmitter(indent_size=4)
-                header_opencl = emitter.emit(header_ir)
-
-                # Post-process: Fix GLSL types and functions inside #ifdef blocks
-                # This is a workaround for Session 9's limitation where code inside #ifdef blocks
-                # is not transformed by the AST transformer
-                header_opencl = post_process_ifdef_blocks(header_opencl)
+            # Post-process: Fix GLSL types and functions inside #ifdef blocks
+            # (code inside #ifdef blocks is not transformed by the AST
+            # transformer — raw-text pass-through)
+            header_opencl = post_process_ifdef_blocks(header_opencl)
+            # Category AG cluster 1 — confine any user #define of a read-only
+            # uniform (iTime/iFrame/...) with a trailing #undef so the kernel's
+            # SHADERTOY_INPUTS assignments (iTime = AT_Time; ...) are not
+            # rewritten to non-lvalues. The suppressed macros' FINAL
+            # definitions are captured FIRST (before our #undef block lands in
+            # the text) and re-emitted at the top of the kernel glue below
+            # (push-pop: the entry body is inlined AFTER SHADERTOY_INPUTS and
+            # must still see the user's remap). Shared helper -> Houdini
+            # benefits too.
+            # Definitions from the PREPROCESSED source (bodies already valid
+            # OpenCL); liveness from the RAW source (both the emitter and the
+            # preprocessor drop user #undef lines, which last-one-wins needs).
+            ag_redefines = collect_uniform_redefines(glsl_source, glsl_raw)
+            header_opencl = append_uniform_undefs(header_opencl)
         except Exception as e:
-            raise TranspileError(f"Failed to transform header: {e}")
+            raise TranspileError(f"Failed to emit header: {e}")
 
         if verbose:
             print(f"    [OK] Header: {len(header_opencl)} chars")
 
-    # Stage 5: Transform kernel (mainImage body)
+    # Stage 5: Emit the kernel body directly from the entry function's IR.
+    # No synthetic re-wrap, no re-parse of emitted OpenCL, no '*fragColor'
+    # substring surgery: entry params were never pointerized (the transformer
+    # excludes the entry function from pointer_params), so the body already
+    # references fragColor/fragCoord as the plain @KERNEL locals they are.
     if verbose:
-        print("\n[5/6] Transforming kernel (mainImage body)...")
+        print("\n[5/6] Emitting kernel (mainImage body)...")
 
-    # Wrap kernel body in mainImage signature for AST parsing.
-    # For custom parameter names (e.g. `out vec4 O, vec2 U`) we keep the body
-    # verbatim and bridge the names with alias declarations + a final write to
-    # fragColor. This avoids renaming identifiers in the body (which would risk
-    # clobbering same-named locals in nested scopes for single-letter names).
+    try:
+        emitter = OpenCLEmitter(indent_size=4)
+        emitter.indent_level = 1  # body statements sit at function-body depth
+        body_stmts = entry_ir.body.statements if entry_ir.body else []
+        kernel_opencl_body = "".join(emitter.emit(s) for s in body_stmts).strip()
+    except Exception as e:
+        raise TranspileError(f"Failed to emit kernel body: {e}")
+
+    # For custom parameter names (e.g. `out vec4 O, vec2 U`) bridge the names
+    # with alias declarations + a final write to fragColor. This avoids
+    # renaming identifiers in the body (which would risk clobbering same-named
+    # locals in nested scopes for single-letter names).
     out_alias = ""
     in_alias = ""
     out_finalize = ""
     if out_name != "fragColor":
-        out_alias = f"    vec4 {out_name} = vec4(0.0, 0.0, 0.0, 1.0);\n"
+        out_alias = f"    float4 {out_name} = (float4)(0.0f, 0.0f, 0.0f, 1.0f);\n"
         out_finalize = f"\n    fragColor = {out_name};"
     if in_name != "fragCoord":
-        in_alias = f"    vec2 {in_name} = fragCoord;\n"
-
-    kernel_glsl_full = (
-        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
-        f"{out_alias}{in_alias}{kernel_glsl_body}{out_finalize}\n"
-        "}"
-    )
-
-    try:
-        kernel_ast = parser.parse(kernel_glsl_full)
-        kernel_ir = transformer.transform(kernel_ast)
-        emitter = OpenCLEmitter(indent_size=4)
-        kernel_opencl_full = emitter.emit(kernel_ir)
-    except Exception as e:
-        raise TranspileError(f"Failed to transform kernel: {e}")
-
-    # Extract just the body from transformed OpenCL
-    # The transformed code is now OpenCL, so extract body again
-    try:
-        # Parse the OpenCL to extract body (it's valid C-like syntax)
-        _, kernel_opencl_body, _, _ = extract_main_image_sections(kernel_opencl_full, parser)
-    except Exception as e:
-        # Fallback: regex extraction
-        match = re.search(
-            r'void\s+mainImage\s*\([^)]+\)\s*\{(.*)\}',
-            kernel_opencl_full,
-            re.DOTALL
-        )
-        if match:
-            kernel_opencl_body = match.group(1).strip()
-        else:
-            raise TranspileError(f"Failed to extract transformed kernel body: {e}")
-
-    # Post-process: Remove dereferences of mainImage parameters
-    # In the Houdini kernel context, fragColor and fragCoord are local variables, not pointers
-    # The transformer treats them as function parameters (fragColor is out, so adds *dereference)
-    # We need to remove these dereferences for the kernel context
-    kernel_opencl_body = kernel_opencl_body.replace('*fragColor', 'fragColor')
-    kernel_opencl_body = kernel_opencl_body.replace('*fragCoord', 'fragCoord')
+        in_alias = f"    float2 {in_name} = fragCoord;\n"
+    if out_alias or in_alias or out_finalize:
+        kernel_opencl_body = (
+            f"{out_alias}{in_alias}    {kernel_opencl_body}{out_finalize}"
+        ).strip()
 
     # Post-process: Fix GLSL types and functions inside #ifdef blocks
-    # This is a workaround for Session 9's limitation where code inside #ifdef blocks
-    # is not transformed by the AST transformer
+    # (raw-text pass-through, same as the header)
     kernel_opencl_body = post_process_ifdef_blocks(kernel_opencl_body)
 
     # Category A — assign hoisted program-scope global initializers at the top of
@@ -447,8 +478,18 @@ def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> Tran
             hoist_lines.append(f"    {name} = {hoist_emitter.emit(init_ir)};")
         kernel_opencl_body = "\n".join(hoist_lines) + "\n" + kernel_opencl_body
 
+    # Category AG push-pop — re-apply the user's uniform remaps at the very
+    # top of the kernel glue: SHADERTOY_INPUTS (in main_kernel.cl) has already
+    # expanded by this point, and nothing after the entry body assigns a
+    # uniform (compilecl appends only `AT_fragColor_set(fragColor);}`), so the
+    # re-defined macro covers exactly the inlined user code. Placed before the
+    # hoisted global initializers too — those are user code and saw the macro
+    # on Shadertoy.
+    ag_prefix = uniform_redefine_prefix(ag_redefines)
+
     # Add comment markers to kernel
     kernel_opencl = (
+        f"{ag_prefix}"
         "// ---- SHADERTOY CODE BEGIN ----\n"
         "// Shadertoy void mainImage(...)\n"
         f"{kernel_opencl_body}\n"
@@ -464,6 +505,7 @@ def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> Tran
         full_opencl += header_opencl + "\n\n"
 
     full_opencl += (
+        f"{ag_prefix}"
         "void mainImage(out float4 fragColor, in float2 fragCoord) {\n"
         f"{kernel_opencl_body}\n"
         "}\n"

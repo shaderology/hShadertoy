@@ -1,0 +1,16 @@
+clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE
+
+Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x25e769a13c0>:
+
+<kernel>:1532:12: error: initializing 'float3' (vector of 3 'float' values) with an expression of incompatible type 'float3 *'; dereference with *
+    float3 q = p;
+           ^   ~
+               *
+<kernel>:1535:6: error: member reference base type 'float3 *' is not a structure or union
+    p.x = c * q.x + s * q.z;
+    ~^~
+<kernel>:1536:6: error: member reference base type 'float3 *' is not a structure or union
+    p.z = -s * q.x + c * q.z;
+    ~^~
+
+(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\Users\artur\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyopencl\cl)

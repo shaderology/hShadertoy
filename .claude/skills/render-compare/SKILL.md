@@ -5,117 +5,91 @@ description: Build/run the automated image-comparison harness that renders origi
 
 # Render-correctness comparison (wgpu-shadertoy ⇄ hShadertoy)
 
-> **STATUS: SPEC — not yet built.** The compile campaigns prove shaders
-> *compile*; nothing yet proves they *render correctly*. This skill is the
-> implementation spec, written by the departing lead. Build it as described,
-> in phases, each phase proven before the next. When it exists, replace this
-> STATUS line with usage docs.
+> **STATUS: BUILT & CALIBRATED (2026-07-11).** Home: `tests/rendercompare/`
+> (its README is the usage doc of record). The compile campaigns prove
+> shaders *compile*; this proves they *render the same* — perceptually, not
+> pixel-exact.
 
-## Why this exists
+## Usage
 
-`tests/campaign/` measures transpile+compile only (see its README "scope"
-note). A shader can compile and still render garbage due to *semantic*
-transpile bugs. The reference renderer is **wgpu-shadertoy** — a local,
-already-working checkout at `C:\dev\wgpu_shadertoy` that renders original
-Shadertoy GLSL headlessly. Its environment notes and gotchas are in
-`docs/WGPU-SHADERTOY.md` (owner-verified 2026-07, treat as current).
+```bash
+# fixed 3-shader end-to-end gate (gradient + london + digits); exit!=0 on fail
+python tests/rendercompare/rc.py smoke
 
-## Reference side (works today — verified recipe)
-
-```python
-import os
-os.environ["RENDERCANVAS_FORCE_OFFSCREEN"] = "true"   # BEFORE importing
-from wgpu_shadertoy import Shadertoy
-shader = Shadertoy(code, resolution=(800, 450), offscreen=True)
-frame = shader.snapshot(time_float=2.0, frame=120)     # HxWx4 numpy uint8
+# mass campaign, resumable at every stage (state: tests/rendercompare/ledger.json)
+python tests/rendercompare/rc.py run --tier 2 --limit 50
+# or stage-by-stage: select / render-ref / render-hda / compare / report
 ```
 
-- Install: `pip install -e C:\dev\wgpu_shadertoy` (editable; the PyPI 0.2.0
-  release is broken against wgpu 0.31.1 — `wgpu.gui` was removed upstream).
-- `snapshot()` requires `offscreen=True`.
-- Check `shader._format`: on this machine it's `rgba8unorm` (no swap); if it
-  contains `bgra`, swap channels `arr[..., [2,1,0,3]]`.
-- `Shadertoy.from_id("wtcSzN", ...)` downloads by id (uses `SHADERTOY_KEY` env
-  var; Cloudflare rules in the shadertoy-api skill apply). Prefer feeding GLSL
-  from `tests/campaign/cache/<id>.json` — zero API cost, same corpus the
-  campaigns use.
-- Limits: sampler3D/samplerCube/iChannelTime/iSampleRate unsupported; multipass
-  renders the image pass but flags `complete=False`. **Media (`/media/`) cannot be
-  downloaded** — source iChannel textures from the HDA's bundled assets
-  (`houdini/scripts/python/hshadertoy/builder/hda/assets.json`).
+Selection reads `tests/campaign/ledger.json` (overall==PASS only) and code
+comes from `tests/campaign/cache/` — zero API calls. Tier 2 = single image
+pass, no iChannels (408 candidates); tier 3 = + texture iChannels served
+from the local media mirror `houdini/pic/media/` (233). Multipass is out of
+scope until wgpu-shadertoy buffer support matures.
 
-## Test side (Houdini render via hython)
+**Always eyeball `tests/rendercompare/contact_sheet.html`** (ref | hda | diff
+triplets, worst first) before trusting gates. `ledger.json`, `REPORT.md`,
+`contact_sheet.html`, `artifacts/` are generated — never hand-edit.
 
-The houdini-testing skill documents the two headless scripts. **Phase-1 task:
-extend `template_load_headless.py`** — it ALREADY force-cooks the OpenCL COPs
-(`--cook opencl`), which is the hard part; it just doesn't write images and it
-swallows cook errors (known bug, fix that first — see houdini-testing skill).
-Do NOT build on `builder_test_headless.py`: that one deliberately never cooks
-(the cook call is commented out in `builder.py` by design). Add: save the
-cooked COP output to PNG + non-zero exit on cook errors. Verify with the
-owner-blessed canonical shader `wfffRN` (BuffersAndTextures,
-`resources/examples/BuffersAndTextures/`, template shape `..._HDA.json`) which
-exercises buffers+cubemap+common.
+## The contract (both sides identical — details in `tests/rendercompare/common.py`)
 
-## Comparison design (build exactly this, phased)
+800×450, FPS 60, probe frames **601** (iTime 10.0 s) and **151** (iTime
+2.5 s) — frame ≥100 so sims have played out and fade-from-black intros are
+over. `iFrame` = the **Houdini frame number** (HDA binds `$FF`), so the ref
+gets 601, not 600. Verdict gates (in `compare.py`): SSIM + dMAE (MAE after
+~10× box downsample — integrates away half-pixel shifts and filtering
+noise). PASS ≥0.85 SSIM & ≤4 dMAE; RGB only (site forces alpha=1 on Image).
 
-Home: `tests/rendercompare/` — mirror the campaign pattern: a `ledger.json`
-source of truth, per-shader artifacts dir, idempotent CLI stages
-(`render-ref`, `render-hda`, `compare`, `report`), resumable after any crash.
+## Hard-won calibration facts (do not rediscover)
 
-**Determinism contract (both sides identical):** resolution 800×450; fixed
-`iTime=2.0`, `iFrame=120`; `iMouse=(0,0,0,0)`; `iDate` pinned; skip shaders
-using true randomness/webcam/mic/video/keyboard.
+- **Orientation & color already match** — no y-flip, no transfer curve
+  difference. wgpu snapshot rows are top-down display order; the `rop_image`
+  PNG (OCIO "Automatic", HDA output "sRGB - Texture") matches it. The
+  gradient shader in `rc.py smoke` guards this permanently.
+- **Headless Houdini textures read BLACK without `HSHADERTOY_HOUDINI`.** The
+  iChannel file COPs resolve `$HSHADERTOY_HOUDINI/pic/named/...`; headless
+  mode doesn't apply the package env, and the cook still reports success.
+  `render_hda.py` sets it (plus `HOUDINI_OCL_PATH='<repo>/houdini/ocl;&'` —
+  the `;&` segfault rule from houdini_smoke.py applies).
+- **The builder now forwards API sampler settings** (vflip/wrap/filter) to
+  the HDA channel parms (`builder.py`, found by this harness — HDA menu
+  tokens: wrap Clamp='1' Wrap='3', filter 0/1/2=nearest/linear/mipmap, vflip
+  is site-semantics direct). Unit tests: `tests/unit/test_builder_sampler_params.py`.
+- **hython one-shot probes** (parm menus etc.): create a tiny script, run it
+  with `HSHADERTOY_ROOT` + `HOUDINI_OCL_PATH` set — see the parm_menu_probe
+  pattern in the 2026-07-11 session.
 
-**Metrics per shader:** MAE, PSNR, and SSIM over RGB (ignore alpha); store all
-three in the ledger + a diff-heatmap PNG artifact. Suggested initial gates
-(tune on data): PASS ≤2 MAE / ≥30 dB PSNR; WARN below that; FAIL <20 dB.
-Always eyeball the contact sheet (a thumbnail grid of ref/test/diff triplets)
-before trusting gates — a uniform 1-pixel y-shift can pass MAE while being a
-real bug.
+## Known accepted divergences (flagged per shader in the ledger)
 
-**Existing helper — partially fake, handle with care:**
-`tests/helpers/image_comparison.py` already has real `compute_mse`/
-`compute_psnr`, BUT its `compute_ssim` is a placeholder (`1/(1+mse)` — NOT
-SSIM) and `save_comparison_image` raises `NotImplementedError`. Reuse the real
-parts; replace the SSIM with `skimage.metrics.structural_similarity` (or drop
-SSIM) — never let the placeholder write into the ledger.
+`uses_iDate` (both sides datetime.now(), seconds drift), `uses_iTimeDelta`
+(HDA 0.0 vs ref 1/60), `uses_iMouse` (HDA has a baked ~0..1 px demo anim),
+`uses_textureLod`/`uses_derivatives`, `input_*` (webcam/video/volume/…).
+Site-contract divergences (half-pixel fragCoord, alpha, `vec4(1e20)`
+unwritten fragColor, …): `docs/handover/SHADERTOY_SITE_NOTES.md` §2 — when a
+mismatch reproduces one of those signatures, attribute it there before
+hunting new transpiler bugs.
 
-**Known pitfalls to design for (check these FIRST when images differ):**
-1. **Y-flip**: Shadertoy `fragCoord` origin is bottom-left; numpy arrays are
-   top-down; Houdini COPs have their own convention. Calibrate once with a
-   gradient shader (e.g. `fragColor = vec4(uv, 0, 1)`), bake the flip into the
-   harness, and add that gradient as a permanent self-test.
-2. **Color space**: wgpu snapshot is sRGB-encoded uint8; a Houdini COP render
-   may be linear float. Convert both to linear float before metrics.
-3. **Known semantic divergences** (real transpiler-bug hunting ground): GLSL
-   `mod` vs OpenCL `fmod` on negatives; vector relational true = 1 (GLSL) vs
-   -1 (OpenCL masks); derivative fns (`dFdx`/`fwidth`) in a non-raster
-   context; texture filtering/wrap defaults; `precision`/fast-math flags.
-4. **Time-dependence**: two frames (t=2.0 and t=7.3) per shader cheaply
-   catches "correct at t=0 only" bugs.
+## Fix-campaign hookup
 
-**Corpus rollout order:** (1) the calibration gradient + `wfffRN`; (2) all
-campaign-PASS shaders with a single image pass and NO iChannels (fully
-deterministic, no assets); (3) texture-using shaders via bundled HDA assets;
-(4) multipass — needs wgpu-shadertoy multipass support to mature first,
-deprioritize.
+`rc.py smoke` is the render-correctness complement to
+`tests/fixcampaign/houdini_smoke.py` (which cooks the full multipass wfffRN
+stack but writes no images). Run both at end of a fix session; a smoke FAIL
+is a regression — stop, root-cause, fix or revert. Systematic mismatch
+categories found by mass runs feed the fix-campaign taxonomy (two-letter
+codes extending the campaign scheme).
 
-## Phased build plan (one session each, TDD per project rules)
+## Reference-side notes (wgpu-shadertoy)
 
-- **P1**: hython render-to-PNG for one shader + the y-flip/color calibration
-  pair. Exit: `wfffRN` and the gradient render from both sides, aligned.
-- **P2**: `tests/rendercompare/compare.py` metrics + unit tests on synthetic
-  arrays (known-MAE fixtures). Exit: pytest green.
-- **P3**: CLI + ledger + contact-sheet report over corpus tier 2 (~100
-  shaders). Exit: ranked mismatch report, reviewed with owner.
-- **P4**: triage loop — each systematic mismatch becomes a classified bug
-  category (extend the campaign taxonomy letter scheme, two-letter codes) and
-  feeds the fix-campaign workflow.
+Local editable checkout `C:\dev\wgpu_shadertoy` (PyPI 0.2.0 is broken vs
+wgpu 0.31.1); env notes in `docs/WGPU-SHADERTOY.md`. Offscreen recipe:
+`RENDERCANVAS_FORCE_OFFSCREEN=true` before import, `snapshot()` needs
+`offscreen=True`, check `shader._format` for bgra. sampler3D/samplerCube/
+iChannelTime unsupported; `/media/` is Cloudflare-blocked — textures come
+from the repo mirror via `common.media_path_for_src()`.
 
 ## Related
 
+- `tests/rendercompare/README.md` — usage doc of record
 - `.claude/skills/houdini-testing/SKILL.md` — hython invocation details
-- `.claude/skills/shadertoy-api/SKILL.md` — Cloudflare/API rules
-- `.claude/skills/mass-test-campaign/SKILL.md` — the ledger/stage pattern to copy
-- `docs/WGPU-SHADERTOY.md` — full wgpu-shadertoy environment notes
+- `.claude/skills/mass-test-campaign/SKILL.md` — the ledger/stage pattern this copies
+- `docs/WGPU-SHADERTOY.md` — wgpu-shadertoy environment notes

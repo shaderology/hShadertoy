@@ -11,7 +11,6 @@ from hshadertoy.transpiler.transpile_glsl import (
     transpile,
     TranspilationError,
     _detect_renderpass_type,
-    _split_header_and_body,
     _format_for_houdini
 )
 
@@ -41,57 +40,123 @@ class TestRenderpassDetection:
 
 
 class TestHeaderBodySplit:
-    """Test splitting OpenCL code into header and body"""
+    """Test the IR-level header/body split (single-TU entry-point model:
+    no brace-counting over emitted text, no '*fragColor' surgery — the
+    transformer never pointerizes the entry's params)."""
 
     def test_split_simple_shader(self):
-        opencl = """#define PI 3.14f
-
-void mainImage(__private float4* fragColor, float2 fragCoord) {
-    *fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);
-}"""
-        header, body = _split_header_and_body(opencl, "mainImage")
-
+        glsl = (
+            "#define PI 3.14\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        header, kernel = result.split("@KERNEL", 1)
         assert "#define PI 3.14f" in header
         assert "void mainImage" not in header
-        assert "*fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);" in body
+        assert "fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);" in kernel
+        assert "*fragColor" not in kernel
 
     def test_split_with_functions(self):
-        opencl = """float4 helper(float x) {
-    return (float4)(x, x, 0.0f, 1.0f);
-}
-
-void mainImage(__private float4* fragColor, float2 fragCoord) {
-    *fragColor = helper(0.5f);
-}"""
-        header, body = _split_header_and_body(opencl, "mainImage")
-
+        glsl = (
+            "vec4 helper(float x) { return vec4(x, x, 0.0, 1.0); }\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = helper(0.5);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        header, kernel = result.split("@KERNEL", 1)
         assert "float4 helper" in header
-        assert "*fragColor = helper(0.5f);" in body
+        assert "fragColor = helper(0.5f);" in kernel
+
+    def test_split_keeps_code_after_mainimage(self):
+        """Category S: post-mainImage definitions stay in the header."""
+        glsl = (
+            "float Fn(float x);\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(Fn(1.0));\n"
+            "}\n"
+            "float Fn(float x) { return x * 2.0; }\n"
+        )
+        result = transpile(glsl)
+        header, kernel = result.split("@KERNEL", 1)
+        assert "float Fn(float x);" in header
+        assert "return x * 2.0f;" in header
+        assert "Fn(1.0f)" in kernel
 
     def test_split_common_renderpass(self):
-        opencl = """#define PI 3.14f
-float helper() { return 1.0f; }"""
-        header, body = _split_header_and_body(opencl, "Common")
+        glsl = "#define PI 3.14\nfloat helper() { return 1.0; }\n"
+        result = transpile(glsl, mode="Common")
+        assert "@KERNEL" not in result
+        assert "#define PI 3.14f" in result
+        assert "float helper()" in result
 
-        assert header == opencl
-        assert body == ""
+
+class TestHoistInjection:
+    """Category A globals must be assigned at the top of the @KERNEL body
+    (previously LOST in this host — TRANSPILER_REVIEW §0.2)."""
+
+    def test_nonconst_global_hoisted_into_kernel(self):
+        glsl = (
+            "vec3 L = normalize(vec3(1.0, 0.9, 0.3));\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(L, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        header, kernel = result.split("@KERNEL", 1)
+        assert "float3 L;" in header
+        assert "L = GLSL_normalize(" in kernel
+        # hoist precedes the body statements
+        assert kernel.index("L = GLSL_normalize(") < kernel.index("fragColor =")
+
+
+class TestCustomParamNames:
+    """Golf-style `out vec4 O, vec2 U` signatures are bridged via aliases."""
+
+    def test_custom_names_aliased(self):
+        glsl = (
+            "void mainImage(out vec4 O, vec2 U) {\n"
+            "    O = vec4(U, 0.0, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        _, kernel = result.split("@KERNEL", 1)
+        assert "float2 U = fragCoord;" in kernel
+        assert "fragColor = O;" in kernel
+        assert "O = (float4)(U, 0.0f, 1.0f);" in kernel
+
+
+class TestEntryNormalization:
+    """Unconventional entries are normalized before the pipeline."""
+
+    def test_bare_main_gl_fragcolor(self):
+        glsl = (
+            "void main(void) {\n"
+            "    gl_FragColor = vec4(gl_FragCoord.xy, 0.0, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        assert "@KERNEL" in result
+        assert "@fragColor.set(fragColor);" in result
 
 
 class TestHoudiniFormatting:
     """Test Houdini output formatting"""
 
     def test_format_simple_shader(self):
+        # The body arrives deref-free: the transformer never pointerizes the
+        # entry's params (no '*fragColor' surgery exists anymore).
         header = "#define PI 3.14f"
-        body = "*fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);"
+        body = "fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);"
         result = _format_for_houdini(header, body, "mainImage")
 
         assert "@KERNEL" in result
         assert "SHADERTOY_INPUTS" in result
         assert "@fragColor.set(fragColor);" in result
         assert "#define PI 3.14f" in result
-        # Pointer syntax should be removed by _fix_houdini_pointers
         assert "fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);" in result
-        assert "*fragColor" not in result  # Verify pointer syntax was removed
 
     def test_format_common_renderpass(self):
         header = "#define PI 3.14f\nfloat helper() { return 1.0f; }"
@@ -103,7 +168,7 @@ class TestHoudiniFormatting:
 
     def test_format_with_empty_header(self):
         header = ""
-        body = "*fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);"
+        body = "fragColor = (float4)(1.0f, 0.0f, 0.0f, 1.0f);"
         result = _format_for_houdini(header, body, "mainImage")
 
         assert "@KERNEL" in result

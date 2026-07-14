@@ -105,6 +105,55 @@ struct Camera { vec3 p, t; };
         assert "float3 p, t;" in opencl
         assert "} Camera;" in opencl
 
+    def test_struct_definition_with_trailing_variable(self):
+        """Category AH: `struct Name {...} var;` defines a type AND a global.
+
+        GLSL allows a struct definition to carry a trailing variable. The old
+        transpiler emitted the struct with a bare `struct Name` tag and no
+        typedef, so later bare-name uses (`Name p`) were invalid C
+        ("must use 'struct' tag to refer to type 'Name'"). It must typedef the
+        struct (bare-name-usable) and emit the variable separately.
+        """
+        glsl = """
+struct positionStruct {
+    vec2 texcoord;
+    vec3 worldPosition;
+} pos;
+
+vec3 calc(positionStruct ps) {
+    return ps.worldPosition;
+}
+"""
+        opencl = transform_and_emit(glsl)
+
+        # The struct must be typedef'd so the bare name is usable.
+        assert "typedef struct {" in opencl
+        assert "} positionStruct;" in opencl
+        # The trailing variable is emitted as a plain declaration of that type.
+        assert "positionStruct pos;" in opencl
+        # No bare `struct Name {` definition (would need a struct tag at uses).
+        assert "struct positionStruct {" not in opencl
+        # Fields are mapped to OpenCL types (proves it went through the real
+        # struct path, not the verbatim passthrough).
+        assert "float2 texcoord;" in opencl
+        assert "float3 worldPosition;" in opencl
+
+    def test_struct_definition_with_trailing_variable_multi(self):
+        """Category AH: trailing comma-separated variables of the struct type."""
+        glsl = """
+struct S {
+    float a;
+} u, v;
+"""
+        opencl = transform_and_emit(glsl)
+
+        assert "typedef struct {" in opencl
+        assert "} S;" in opencl
+        # Both variables emitted with the bare type name.
+        assert "S u" in opencl
+        assert "v" in opencl
+        assert "struct S {" not in opencl
+
     def test_multiple_structs(self):
         """Test multiple struct definitions."""
         glsl = """

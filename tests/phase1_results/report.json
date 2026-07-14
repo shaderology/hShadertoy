@@ -1,0 +1,194 @@
+[
+  {
+    "dir": "simple",
+    "name": "caustic.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "colorful.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "flame.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "flames.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "gradient.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "hexagonal.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "ripples.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "sand.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "silexars.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "transformations.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "truchet.glsl",
+    "transpile": "FAIL",
+    "compile": null,
+    "transpile_err": "TranspileError: Failed to transform kernel: Invalid number of arguments for mat2 constructor: 3 at line 8, column 13",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "vignette.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "voronoi.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "simple",
+    "name": "warping.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "medium",
+    "name": "3D_Voronoi_noise.glsl",
+    "transpile": "OK",
+    "compile": "FAIL",
+    "transpile_err": "",
+    "compile_err": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE\n\nBuild on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:\n\n<kernel>:1528:22: error: initializer element is not a compile-time constant\nconst float ROOT_3 = GLSL_sqrt(3.0f);\n                     ^~~~~~~~~~~~~~~\n\n(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\\Users\\artur\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pyopencl\\cl)"
+  },
+  {
+    "dir": "medium",
+    "name": "cloudten.glsl",
+    "transpile": "OK",
+    "compile": "FAIL",
+    "transpile_err": "",
+    "compile_err": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE\n\nBuild on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:\n\n<kernel>:1541:7: error: conflicting types for 'noise'\nfloat noise(float3 p) {\n      ^\n<kernel>:1535:7: note: previous definition is here\nfloat noise(float t) {\n      ^\n<kernel>:1554:21: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type 'float'\n        rz += noise(x) * a;\n                    ^\n<kernel>:1535:19: note: passing argument to parameter 't' here\nfloat noise(float t) {\n                  ^\n<kernel>:1806:25: error: cannot convert between vector and non-scalar values ('float3' (vector of 3 'float' values) and 'matrix3x3')\n    float3 proj = (-lgt * inv_rotation);\n                   ~~~~ ^ ~~~~~~~~~~~~\n\n(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\\Users\\artur\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pyopencl\\cl)"
+  },
+  {
+    "dir": "medium",
+    "name": "fireandsmoke.glsl",
+    "transpile": "OK",
+    "compile": "FAIL",
+    "transpile_err": "",
+    "compile_err": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE\n\nBuild on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:\n\n<kernel>:1546:65: error: passing 'float4' (vector of 4 'float' values) to parameter of incompatible type 'float'\n        p.yz = GLSL_mul_vec2_mat2(p.yz, GLSL_matrix2x2_diagonal(GLSL_cos(.3f * T + (float4)(0, 33, 11, 0))));\n                                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\nC:/dev/hShadertoy/houdini/ocl/include/matrix_ops.h:17:48: note: passing argument to parameter 's' here\ninline matrix2x2 GLSL_matrix2x2_diagonal(float s) {\n                                               ^\n\n(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\\Users\\artur\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pyopencl\\cl)"
+  },
+  {
+    "dir": "medium",
+    "name": "Hexagon_X5.glsl",
+    "transpile": "OK",
+    "compile": "FAIL",
+    "transpile_err": "",
+    "compile_err": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE\n\nBuild on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:\n\n<kernel>:1548:16: error: initializer element is not a compile-time constant\nmatrix2x2 r2 = GLSL_matrix2x2_diagonal(0.0f), r3 = GLSL_matrix2x2_diagonal(0.0f);\n               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n<kernel>:1548:52: error: initializer element is not a compile-time constant\nmatrix2x2 r2 = GLSL_matrix2x2_diagonal(0.0f), r3 = GLSL_matrix2x2_diagonal(0.0f);\n                                                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n<kernel>:1567:24: error: invalid operands to binary expression ('float3 *' and 'float')\n    *C = GLSL_mix(C, C * .25f, GLSL_smoothstep(.1f + px, -px, b - .01f));\n                     ~ ^ ~~~~\n<kernel>:1568:10: error: no matching function for call to 'GLSL_mix'\n    *C = GLSL_mix(C, clr, GLSL_smoothstep(px, -px, b));\n         ^~~~~~~~\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:76:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float3' (vector of 3 'float' values) for 1st argument; dereference the argument with *\n__GLSL_OVER float3 GLSL_mix(float3 a, float3 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:79:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float3' (vector of 3 'float' values) for 1st argument; dereference the argument with *\n__GLSL_OVER float3 GLSL_mix(float3 a, float3 b, float3 t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:74:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float' for 1st argument\n__GLSL_OVER float  GLSL_mix(float  a, float  b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:75:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float2' (vector of 2 'float' values) for 1st argument\n__GLSL_OVER float2 GLSL_mix(float2 a, float2 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:77:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float4' (vector of 4 'float' values) for 1st argument\n__GLSL_OVER float4 GLSL_mix(float4 a, float4 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:78:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float2' (vector of 2 'float' values) for 1st argument\n__GLSL_OVER float2 GLSL_mix(float2 a, float2 b, float2 t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:80:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float4' (vector of 4 'float' values) for 1st argument\n__GLSL_OVER float4 GLSL_mix(float4 a, float4 b, float4 t){ return a + (b - a) * t; }\n                   ^\n<kernel>:1569:35: error: invalid operands to binary expression ('float3 *' and 'float')\n    *C = GLSL_mix(C, GLSL_clamp(C + .2f, C, (float3)(.95f)), GLSL_smoothstep(.01f + px, -px, b + .1f));\n                                ~ ^ ~~~\n<kernel>:1570:10: error: no matching function for call to 'GLSL_mix'\n    *C = GLSL_mix(C, trm, GLSL_smoothstep(px, -px, GLSL_abs(b) - ln));\n         ^~~~~~~~\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:76:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float3' (vector of 3 'float' values) for 1st argument; dereference the argument with *\n__GLSL_OVER float3 GLSL_mix(float3 a, float3 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:79:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float3' (vector of 3 'float' values) for 1st argument; dereference the argument with *\n__GLSL_OVER float3 GLSL_mix(float3 a, float3 b, float3 t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:74:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float' for 1st argument\n__GLSL_OVER float  GLSL_mix(float  a, float  b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:75:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float2' (vector of 2 'float' values) for 1st argument\n__GLSL_OVER float2 GLSL_mix(float2 a, float2 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:77:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float4' (vector of 4 'float' values) for 1st argument\n__GLSL_OVER float4 GLSL_mix(float4 a, float4 b, float  t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:78:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float2' (vector of 2 'float' values) for 1st argument\n__GLSL_OVER float2 GLSL_mix(float2 a, float2 b, float2 t){ return a + (b - a) * t; }\n                   ^\nC:/dev/hShadertoy/houdini/ocl/include\\glslHelpers.h:80:20: note: candidate function not viable: no known conversion from 'float3 *' to 'float4' (vector of 4 'float' values) for 1st argument\n__GLSL_OVER float4 GLSL_mix(float4 a, float4 b, float4 t){ return a + (b - a) * t; }\n                   ^\n<kernel>:1701:25: error: cannot convert between vector and non-scalar values ('float2' (vector of 2 'float' values) and 'matrix2x2')\n    if (hs < .5f)     p *= hs < .25f ? r3 : r2;\n                      ~ ^  ~~~~~~~~~~~~~~~~~~~\n\n(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\\Users\\artur\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pyopencl\\cl)"
+  },
+  {
+    "dir": "medium",
+    "name": "Moving_Voronoi_Cells.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "medium",
+    "name": "Noise_Voronoi_Diagram.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "medium",
+    "name": "ocean.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "medium",
+    "name": "shinyspheres.glsl",
+    "transpile": "OK",
+    "compile": "OK",
+    "transpile_err": "",
+    "compile_err": ""
+  },
+  {
+    "dir": "complex",
+    "name": "adjugate.glsl",
+    "transpile": "FAIL",
+    "compile": null,
+    "transpile_err": "TranspileError: Failed to parse GLSL: ParseError(line 262, col 1): Syntax error at line 262, column 1",
+    "compile_err": ""
+  },
+  {
+    "dir": "complex",
+    "name": "Seascape.glsl",
+    "transpile": "OK",
+    "compile": "FAIL",
+    "transpile_err": "",
+    "compile_err": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE\n\nBuild on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:\n\n<kernel>:1550:59: error: initializer element is not a compile-time constant\nconst float3 SEA_WATER_COLOR = (float3)(0.8f, 0.9f, 0.6f) * 0.6f;\n                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~\n<kernel>:1554:28: error: initializer element is not a compile-time constant\nconst matrix2x2 octave_m = GLSL_mat2(1.6f, 1.2f, -1.2f, 1.6f);\n                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n<kernel>:1561:6: error: subscripted value is not an array, pointer, or vector\n    m[0] = (float3)(a1.y * a3.y + a1.x * a2.x * a3.x, a1.y * a2.x * a3.x + a3.y * a1.x, -a2.y * a3.x);\n    ~^~\n<kernel>:1562:6: error: subscripted value is not an array, pointer, or vector\n    m[1] = (float3)(-a2.y * a1.x, a1.y * a2.y, a2.x);\n    ~^~\n<kernel>:1563:6: error: subscripted value is not an array, pointer, or vector\n    m[2] = (float3)(a3.y * a1.x * a2.x + a1.y * a3.x, a1.x * a3.x - a1.y * a3.y * a2.x, a2.y * a3.y);\n    ~^~\n<kernel>:1672:26: error: passing 'float3 *' to parameter of incompatible type 'float3' (vector of 3 'float' values)\n        float hmid = map(p);\n                         ^\n<kernel>:1601:18: note: passing argument to parameter 'p' here\nfloat map(float3 p) {\n                 ^\n\n(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\\Users\\artur\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pyopencl\\cl)"
+  }
+]

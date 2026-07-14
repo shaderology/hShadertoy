@@ -1,0 +1,1105 @@
+{
+ "4dX3zl": {
+  "compare": {
+   "151": {
+    "dmae": 1.6527776718139648,
+    "mae": 2.9635555744171143,
+    "psnr": 23.6194131383626,
+    "ssim": 0.8668702555013232,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 1.8291665315628052,
+    "mae": 3.181511163711548,
+    "psnr": 23.530106719011457,
+    "ssim": 0.8547433489291691,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dX3zl\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dX3zl\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4dX3zl",
+  "name": "Branchless Voxel Raycasting",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dX3zl\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dX3zl\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "PASS"
+ },
+ "4dj3Dd": {
+  "compare": {
+   "151": {
+    "dmae": 81.6476821899414,
+    "mae": 82.1724853515625,
+    "psnr": 5.901400093770269,
+    "ssim": 0.4030305283623828,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 82.9958267211914,
+    "mae": 83.7817611694336,
+    "psnr": 5.856064524792256,
+    "ssim": 0.3669762713398694,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dj3Dd\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dj3Dd\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4dj3Dd",
+  "name": "[SH2014] Germs",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dj3Dd\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dj3Dd\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "4dlXzN": {
+  "compare": {
+   "151": {
+    "dmae": 26.62101936340332,
+    "mae": 28.152503967285156,
+    "psnr": 15.422979717282006,
+    "ssim": 0.8686514182625863,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 26.635278701782227,
+    "mae": 28.165569305419922,
+    "psnr": 15.42281335452758,
+    "ssim": 0.8690689905120896,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dlXzN\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dlXzN\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4dlXzN",
+  "name": "is anyone there?",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dlXzN\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4dlXzN\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "4sXSD8": {
+  "compare": {
+   "151": {
+    "dmae": 0.4529629647731781,
+    "mae": 2.0333991050720215,
+    "psnr": 34.25883933265776,
+    "ssim": 0.8538746566748325,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 0.22592590749263763,
+    "mae": 1.8696916103363037,
+    "psnr": 36.83103969967122,
+    "ssim": 0.8554607562915828,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sXSD8\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sXSD8\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4sXSD8",
+  "name": "Dancing Particles",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sXSD8\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sXSD8\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "PASS"
+ },
+ "4sfGWX": {
+  "compare": {
+   "151": {
+    "dmae": 8.769166946411133,
+    "mae": 10.188249588012695,
+    "psnr": 18.29704698510056,
+    "ssim": 0.8342822196667531,
+    "verdict": "WARN"
+   },
+   "601": {
+    "dmae": 21.99102020263672,
+    "mae": 23.51519012451172,
+    "psnr": 14.71354517547917,
+    "ssim": 0.7187674121941489,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sfGWX\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sfGWX\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4sfGWX",
+  "name": "Wolfenstein 3D",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sfGWX\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4sfGWX\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "4slGWM": {
+  "compare": {
+   "151": {
+    "dmae": 86.8949966430664,
+    "mae": 87.0936508178711,
+    "psnr": 7.225692145047352,
+    "ssim": 0.8129869405599552,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 107.95425415039062,
+    "mae": 108.13822174072266,
+    "psnr": 6.283994350268804,
+    "ssim": 0.9196971561738477,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4slGWM\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4slGWM\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "4slGWM",
+  "name": "enlightened dark cloud",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4slGWM\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\4slGWM\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "MdS3R3": {
+  "compare": {
+   "151": {
+    "dmae": 1.9217593669891357,
+    "mae": 3.9109416007995605,
+    "psnr": 22.111616639554207,
+    "ssim": 0.8647567911877573,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 1.7436110973358154,
+    "mae": 3.29693603515625,
+    "psnr": 23.55532745028182,
+    "ssim": 0.8840485482679663,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdS3R3\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdS3R3\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "MdS3R3",
+  "name": "Twistors",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdS3R3\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdS3R3\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "PASS"
+ },
+ "MdfGDr": {
+  "compare": {
+   "151": {
+    "dmae": 65.72490692138672,
+    "mae": 67.69416809082031,
+    "psnr": 9.64625093666252,
+    "ssim": 0.32746214997745154,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 74.77342987060547,
+    "mae": 77.1275405883789,
+    "psnr": 8.695005277293578,
+    "ssim": 0.2565593022188375,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdfGDr\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdfGDr\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "MdfGDr",
+  "name": "Bubblefield.",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdfGDr\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdfGDr\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "MdlGzn": {
+  "compare": {
+   "151": {
+    "dmae": 127.45417785644531,
+    "mae": 128.39146423339844,
+    "psnr": 4.27143575547828,
+    "ssim": 0.03861986417531676,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 94.22175598144531,
+    "mae": 94.72938537597656,
+    "psnr": 6.6443414659935796,
+    "ssim": 0.04136941591002344,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlGzn\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlGzn\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "MdlGzn",
+  "name": "Torus Journey",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlGzn\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlGzn\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "MdlSRM": {
+  "compare": {
+   "151": {
+    "dmae": 1.5488888025283813,
+    "mae": 4.631124019622803,
+    "psnr": 21.617531393700773,
+    "ssim": 0.8698843785558698,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 1.5087037086486816,
+    "mae": 4.52031946182251,
+    "psnr": 21.674948288315775,
+    "ssim": 0.8718372329818312,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlSRM\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlSRM\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "MdlSRM",
+  "name": "KIFS",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlSRM\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MdlSRM\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "PASS"
+ },
+ "MsX3zr": {
+  "compare": {
+   "151": {
+    "dmae": 113.10981750488281,
+    "mae": 114.17444610595703,
+    "psnr": 5.229521209414133,
+    "ssim": 0.15027872511709747,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 106.65408325195312,
+    "mae": 109.72178649902344,
+    "psnr": 5.415309692987803,
+    "ssim": 0.15474301525070755,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MsX3zr\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MsX3zr\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "MsX3zr",
+  "name": "Cubes and Spheres",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MsX3zr\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\MsX3zr\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "XdXGWr": {
+  "compare": {
+   "151": {
+    "dmae": 86.7061996459961,
+    "mae": 105.49711608886719,
+    "psnr": 5.436379290713712,
+    "ssim": 0.1323397967461038,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 79.43500518798828,
+    "mae": 109.33631134033203,
+    "psnr": 5.891476404801943,
+    "ssim": 0.15847659611558915,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXGWr\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXGWr\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "XdXGWr",
+  "name": "Akiyoshi's Snakes Illusion",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXGWr\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXGWr\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "XdXXz4": {
+  "compare": {
+   "151": {
+    "dmae": 133.1769561767578,
+    "mae": 134.07310485839844,
+    "psnr": 3.8716908135166883,
+    "ssim": 0.7455409215465548,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 125.24073028564453,
+    "mae": 125.6024169921875,
+    "psnr": 4.523579528125171,
+    "ssim": 0.8695783326940054,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXXz4\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXXz4\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "XdXXz4",
+  "name": "Motion Blur Visualization",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXXz4\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdXXz4\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "XdsGDr": {
+  "compare": {
+   "151": {
+    "dmae": 0.6666666269302368,
+    "mae": 1.5941147804260254,
+    "psnr": 24.79158010693903,
+    "ssim": 0.94251055300009,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 0.23777779936790466,
+    "mae": 0.3290731608867645,
+    "psnr": 38.287869377129795,
+    "ssim": 0.9808843688881164,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGDr\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGDr\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "XdsGDr",
+  "name": "Julia fractal",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGDr\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGDr\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "PASS"
+ },
+ "XdsGWH": {
+  "compare": {
+   "151": {
+    "dmae": 35.190093994140625,
+    "mae": 36.62751007080078,
+    "psnr": 14.281444353647084,
+    "ssim": 0.7337812487622881,
+    "verdict": "FAIL"
+   },
+   "601": {
+    "dmae": 35.3305549621582,
+    "mae": 36.72645568847656,
+    "psnr": 14.247075285373201,
+    "ssim": 0.7331422325987449,
+    "verdict": "FAIL"
+   }
+  },
+  "flags": [
+   "uses_iMouse"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGWH\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGWH\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "XdsGWH",
+  "name": "Mars demo",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGWH\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\XdsGWH\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "tier": 2,
+  "verdict": "FAIL"
+ },
+ "_digits": {
+  "compare": {
+   "151": {
+    "dmae": 1.079722285270691,
+    "mae": 1.9465000629425049,
+    "psnr": 21.172857594791804,
+    "ssim": 0.9574480304755999,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 1.1577777862548828,
+    "mae": 1.9422500133514404,
+    "psnr": 21.182350534716548,
+    "ssim": 0.9571104854478644,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [
+   "uses_iFrame",
+   "uses_iMouse",
+   "uses_iTimeDelta"
+  ],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_digits\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_digits\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "_digits",
+  "name": "Rendering Numbers",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_digits\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_digits\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "shader_inline": {
+   "Shader": {
+    "info": {
+     "date": "1715978545",
+     "description": "This uses a custom font and text engine that I made to display basic numbers. All of this was done by hand (including porting the glyphs from images to hex data). It is currently showing an example using some of shadertoy's uniforms.",
+     "flags": 0,
+     "hasliked": 0,
+     "id": "M333Rr",
+     "likes": 10,
+     "name": "Rendering Numbers",
+     "published": 3,
+     "tags": [
+      "text",
+      "numbers",
+      "font",
+      "digits"
+     ],
+     "usePreview": 0,
+     "username": "ThePlaneGuy45",
+     "viewed": 296
+    },
+    "renderpass": [
+     {
+      "code": "void mainImage( out vec4 fragColor, in vec2 fragCoord )\n{\n    int iResolution_y_render\n        = number(iResolution.y, 0, 3.0, vec2(10, 10), fragCoord);\n    int iResolution_x_render\n        = number(iResolution.x, 0, 3.0, vec2(10, 52), fragCoord);\n        \n    int iTime_render \n        = number(iTime, 4, 3.0, vec2(10, 136), fragCoord);\n    int iTimeDelta_render \n        = number(iTimeDelta, 4, 3.0, vec2(10, 178), fragCoord);\n        \n    int iFrameRate_render\n        = number(iFrameRate, 4, 3.0, vec2(10, 262), fragCoord);\n    int iFrame_render \n        = number(float(iFrame), 0, 3.0, vec2(10, 304), fragCoord);\n        \n    int iMouse_w_render\n        = number(iMouse.w, 0, 3.0, vec2(10, 388), fragCoord);\n    int iMouse_z_render\n        = number(iMouse.z, 0, 3.0, vec2(10, 430), fragCoord);\n    int iMouse_y_render\n        = number(iMouse.y, 0, 3.0, vec2(10, 472), fragCoord);\n    int iMouse_x_render\n        = number(iMouse.x, 0, 3.0, vec2(10, 514), fragCoord);\n    \n    fragColor = vec4(\n        iResolution_y_render+\n        iResolution_x_render+\n        iTime_render+\n        iTimeDelta_render+\n        iFrame_render+\n        iFrameRate_render+\n        iMouse_w_render+\n        iMouse_z_render+\n        iMouse_y_render+\n        iMouse_x_render\n    );\n}",
+      "description": "",
+      "inputs": [],
+      "name": "Image",
+      "outputs": [
+       {
+        "channel": 0,
+        "id": 37
+       }
+      ],
+      "type": "image"
+     },
+     {
+      "code": "uvec4[10] char_numbers = uvec4[10](\n    uvec4(0x7FBFFC0F,0x03C0F33C,0xCF03C0F0,0x3FFDFE00),\n    uvec4(0x1C0F07C3,0xB0CC0300,0xC0300C03,0x0FFFFF00),\n    uvec4(0x7FBFFC0F,0x0301C0E0,0x70381C0E,0x0FFFFF00),\n    uvec4(0x7FBFFC0C,0x0300C3E0,0xF80300F0,0x3FFDFE00),\n    uvec4(0x30DC360F,0x83C0FFFF,0xFC0300C0,0x300C0300),\n    uvec4(0xFFFFFC03,0x00C03FEF,0xFC0300C0,0x3FFFFE00),\n    uvec4(0x7FFFFC03,0x00C03FEF,0xFF03C0F0,0x3FFDFE00),\n    uvec4(0xFFFFF00C,0x070180E0,0x301C0601,0x80601800),\n    uvec4(0x7FBFFC0F,0x03C0DFE7,0xFB03C0F0,0x3FFDFE00),\n    uvec4(0x7FFFFC0F,0x03C0FFF7,0xFC0300C0,0x300C0300)\n);\nuvec4 char_dash = uvec4(0x00000000,0x00003FFF,0xFC000000,0x00000000);\nuvec4 char_period = uvec4(0x00000000,0x00000000,0x00000000,0x00C03000);\n\n\n// usage: glyph(glyphData, scale, offset, fragCoord);\nuint _O(uint v,uint p){return((v<<p)&0x80000000u)>>31;}\nint glyph(uvec4 a,float b,vec2 c,vec2 d){vec2 e=d-c;e/=b;e.y=12.-e.y;if(0.>e.x||e.x>=10.||0.>e.y||e.y>=12.){return 0;}uvec2 f=uvec2(e);uint g=f.x+10u*f.y,h;if(g<32u){h=_O(a.x,g);}else if(g<64u){h=_O(a.y,g-32u);}else if(g<96u){h=_O(a.z,g-64u);}else{h=_O(a.w,g-96u);}return int(h);}\n\n\nint number(in float number, in int places, in float scale, in vec2 pos, in vec2 fragCoord){\n\n    float mx = 12.*scale;\n    int px = 0;\n    \n    if(number < 0.0){\n        px += glyph(char_dash, scale, pos, fragCoord);\n        pos.x += mx;\n        number *= -1.0;\n    }\n    number = round(number * pow(10.0, float(places)));\n    \n    int[20] numlist;\n    int numlistLen = 0;\n    \n    for(; number>=1.0; number /= 10.0) {\n        numlist[numlistLen] = int(mod(number, 10.0));\n        numlistLen++;\n    }\n    \n    if(numlistLen < places+1) {\n        px += glyph(char_numbers[0], scale, pos, fragCoord);\n        pos.x += mx;\n        px += glyph(char_period, scale, pos, fragCoord);\n        pos.x += mx;\n        \n        if(numlistLen < 1) {\n            px += glyph(char_numbers[0], scale, pos, fragCoord);\n            pos.x += mx;\n        }\n    }\n    \n    for(int i = numlistLen-1; i>=0; i--) {\n        px += glyph(char_numbers[numlist[i]], scale, pos, fragCoord);\n        pos.x += mx;\n        \n        if(i==places && places!=0){\n            px += glyph(char_period, scale, pos, fragCoord);\n            pos.x += mx;\n        }\n    }\n    \n    return px>0?1:0;\n    \n}",
+      "description": "",
+      "inputs": [],
+      "name": "Common",
+      "outputs": [],
+      "type": "common"
+     }
+    ],
+    "ver": "0.1"
+   }
+  },
+  "tier": 1,
+  "verdict": "PASS"
+ },
+ "_gradient": {
+  "compare": {
+   "151": {
+    "dmae": 0.03333333134651184,
+    "mae": 0.12513890862464905,
+    "psnr": 57.15688011522004,
+    "ssim": 0.9988502174127156,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 0.03333333134651184,
+    "mae": 0.12513890862464905,
+    "psnr": 57.15688011522004,
+    "ssim": 0.9988502174127156,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_gradient\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_gradient\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "_gradient",
+  "name": "calibration gradient",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_gradient\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_gradient\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "shader_inline": {
+   "Shader": {
+    "info": {
+     "id": "_gradient",
+     "name": "RC calibration gradient"
+    },
+    "renderpass": [
+     {
+      "code": "void mainImage( out vec4 fragColor, in vec2 fragCoord )\n{\n    vec2 uv = fragCoord/iResolution.xy;\n    fragColor = vec4(uv.x, uv.y, 0.0, 1.0);\n}",
+      "inputs": [],
+      "name": "Image",
+      "outputs": [],
+      "type": "image"
+     }
+    ]
+   }
+  },
+  "tier": 1,
+  "verdict": "PASS"
+ },
+ "_london": {
+  "compare": {
+   "151": {
+    "dmae": 0.7343518137931824,
+    "mae": 2.768627882003784,
+    "psnr": 34.74431788250789,
+    "ssim": 0.9846362146152177,
+    "verdict": "PASS"
+   },
+   "601": {
+    "dmae": 0.7343518137931824,
+    "mae": 2.768627882003784,
+    "psnr": 34.74431788250789,
+    "ssim": 0.9846362146152177,
+    "verdict": "PASS"
+   }
+  },
+  "flags": [],
+  "frames": [
+   601,
+   151
+  ],
+  "hda": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_london\\hda_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_london\\hda_f601.png",
+    "status": "OK"
+   }
+  },
+  "id": "_london",
+  "name": "London",
+  "ref": {
+   "151": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_london\\ref_f151.png",
+    "status": "OK"
+   },
+   "601": {
+    "error": "",
+    "notes": [],
+    "png": "C:\\dev\\hShadertoy\\tests\\rendercompare\\artifacts\\_london\\ref_f601.png",
+    "status": "OK"
+   }
+  },
+  "shader_inline": {
+   "Shader": {
+    "info": {
+     "description": "Basic texture reading shader",
+     "name": "London",
+     "username": "hShadertoy"
+    },
+    "renderpass": [
+     {
+      "code": "void mainImage( out vec4 fragColor, in vec2 fragCoord )\n{\n    // Normalized pixel coordinates (from 0 to 1)\n    vec2 uv = fragCoord/iResolution.xy;\n\n    // Texture\n    vec3 col = texture(iChannel0,uv).xyz;\n\n    // Output to screen\n    fragColor = vec4(col,1.0);\n}",
+      "inputs": [
+       {
+        "channel": 0,
+        "ctype": "texture",
+        "id": 5,
+        "sampler": {
+         "filter": "mipmap",
+         "internal": "byte",
+         "srgb": "false",
+         "vflip": "true",
+         "wrap": "repeat"
+        },
+        "src": "/media/a/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg"
+       }
+      ],
+      "name": "Image",
+      "outputs": [],
+      "type": "image"
+     }
+    ],
+    "ver": "0.1"
+   }
+  },
+  "tier": 1,
+  "verdict": "PASS"
+ }
+}

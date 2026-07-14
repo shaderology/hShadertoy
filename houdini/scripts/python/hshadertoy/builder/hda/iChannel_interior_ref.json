@@ -1,0 +1,983 @@
+{
+    "version": 2,
+    "nodes": [
+        {
+            "node_name": "monotorgba2",
+            "node_type": "monotorgba",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "parameters": {
+                "alphaextend": "value",
+                "alphaval": 1.0
+            }
+        },
+        {
+            "node_name": "font2",
+            "node_type": "font",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/font2",
+            "parameters": {
+                "file": "Lato",
+                "text": "misc\n`chs(\"../asset0\")`",
+                "output": "mask",
+                "dosmooth": true,
+                "folder0": 0,
+                "smoothunits": "pixels",
+                "smooth": 0.01,
+                "smooth_pixel": 1.5,
+                "halign": "center",
+                "valign": "middle",
+                "use_descender": false,
+                "fontsize": 0.1,
+                "tx": [
+                    0.0,
+                    0.0
+                ],
+                "ty": [
+                    0.0,
+                    0.0
+                ],
+                "rz": 0.0,
+                "sx": [
+                    1.0,
+                    1.0
+                ],
+                "sy": [
+                    1.0,
+                    1.0
+                ],
+                "tracking": 0.0,
+                "leading": 0.0,
+                "oblique": 0.0,
+                "lod": 1.0
+            }
+        },
+        {
+            "node_name": "layer2",
+            "node_type": "layer",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/layer2",
+            "parameters": {
+                "signature": "f1",
+                "f1": 0.0,
+                "f21": [
+                    1.0,
+                    1.0
+                ],
+                "f22": [
+                    1.0,
+                    1.0
+                ],
+                "f3r": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f3g": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f3b": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4r": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4g": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4b": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4a": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "i": 0,
+                "setres": true,
+                "resx": [
+                    512.0,
+                    512.0
+                ],
+                "resy": [
+                    512.0,
+                    512.0
+                ],
+                "resmenu": 0,
+                "setpixelaspectratio": false,
+                "pixelaspectratio": 1.0,
+                "folder0": 0,
+                "setpixelpad": false,
+                "pixelpad_h1": [
+                    0,
+                    0
+                ],
+                "pixelpad_h2": [
+                    0,
+                    0
+                ],
+                "pixelpad_v1": [
+                    0,
+                    0
+                ],
+                "pixelpad_v2": [
+                    0,
+                    0
+                ],
+                "setprecision": false,
+                "precision": "b32",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": false,
+                "typeinfo": "none",
+                "setpixelscale": false,
+                "pixelscale": 1.0
+            }
+        },
+        {
+            "node_name": "ctype_misc",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_misc",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "color"
+            }
+        },
+        {
+            "node_name": "switch2",
+            "node_type": "switch",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "parameters": {
+                "input": {
+                    "expression": "ch(\"../asset0\")"
+                }
+            }
+        },
+        {
+            "node_name": "bufferA_default",
+            "node_type": "switchifwired",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/bufferA_default",
+            "parameters": {
+                "rule": "firstwire"
+            }
+        },
+        {
+            "node_name": "bufferB_default",
+            "node_type": "switchifwired",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/bufferB_default",
+            "parameters": {
+                "rule": "firstwire"
+            }
+        },
+        {
+            "node_name": "bufferC_default",
+            "node_type": "switchifwired",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/bufferC_default",
+            "parameters": {
+                "rule": "firstwire"
+            }
+        },
+        {
+            "node_name": "bufferD_default",
+            "node_type": "switchifwired",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/bufferD_default",
+            "parameters": {
+                "rule": "firstwire"
+            }
+        },
+        {
+            "node_name": "cubeA_default",
+            "node_type": "switchifwired",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/cubeA_default",
+            "parameters": {
+                "rule": "firstwire"
+            }
+        },
+        {
+            "node_name": "input1",
+            "node_type": "input",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "parameters": {}
+        },
+        {
+            "node_name": "ctype_texture_type_color1",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture_type_color1",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "color"
+            }
+        },
+        {
+            "node_name": "texture2",
+            "node_type": "file",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/texture2",
+            "parameters": {
+                "source": "file",
+                "filename": "$HSHADERTOY_HOUDINI/pic/named/`chs(\"../asset1\")`",
+                "clonename": "",
+                "clonesession": "",
+                "clonemenu": "",
+                "liverenderpath": "",
+                "liverenderstart": "0",
+                "liverenderstop": "0",
+                "reload": "0",
+                "videoframemethod": "start",
+                "videoframestart": 1,
+                "videoframe": {
+                    "expression": "$F"
+                },
+                "setudim": false,
+                "udim": 1001,
+                "border": "default",
+                "missingdata": "color",
+                "missingcolorr": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorg": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorb": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolora": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "colorspace": "raw",
+                "premultiplied": false,
+                "loadcamera": false,
+                "addaovs": "0",
+                "aovs": [
+                    {
+                        "aov#": "C",
+                        "type#": "vector4",
+                        "precision#": "default",
+                        "raw#": false
+                    }
+                ],
+                "aov1": "C",
+                "type1": "vector4",
+                "precision1": "default",
+                "raw1": false
+            }
+        },
+        {
+            "node_name": "output1",
+            "node_type": "output",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/output1",
+            "parameters": {}
+        },
+        {
+            "node_name": "switch1",
+            "node_type": "switch",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "parameters": {
+                "input": {
+                    "expression": "ch(\"../folder\")"
+                }
+            }
+        },
+        {
+            "node_name": "ctype_texture3",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture3",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": true,
+                "border": {
+                    "expression": "ch(\"../wrap\")"
+                },
+                "settypeinfo": false,
+                "typeinfo": "color"
+            }
+        },
+        {
+            "node_name": "vflip10",
+            "node_type": "flip",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/vflip10",
+            "parameters": {
+                "mask": 1.0,
+                "xflip": false,
+                "yflip": {
+                    "expression": "1-ch(\"../vflip\")"
+                },
+                "flop": false
+            }
+        },
+        {
+            "node_name": "ctype_cubemap1",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_cubemap1",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "position"
+            }
+        },
+        {
+            "node_name": "cubemap1",
+            "node_type": "file",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/cubemap1",
+            "parameters": {
+                "source": "file",
+                "filename": "$HSHADERTOY_HOUDINI/pic/named/`chs(\"../asset2\")`",
+                "clonename": "",
+                "clonesession": "",
+                "clonemenu": "",
+                "liverenderpath": "",
+                "liverenderstart": "0",
+                "liverenderstop": "0",
+                "reload": "0",
+                "videoframemethod": "start",
+                "videoframestart": 1,
+                "videoframe": {
+                    "expression": "$F"
+                },
+                "setudim": false,
+                "udim": 1001,
+                "border": "default",
+                "missingdata": "color",
+                "missingcolorr": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorg": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorb": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolora": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "colorspace": "raw",
+                "premultiplied": false,
+                "loadcamera": false,
+                "addaovs": "0",
+                "aovs": [
+                    {
+                        "aov#": "C",
+                        "type#": "vector4",
+                        "precision#": "default",
+                        "raw#": false
+                    }
+                ],
+                "aov1": "C",
+                "type1": "vector4",
+                "precision1": "default",
+                "raw1": false
+            }
+        },
+        {
+            "node_name": "ctype_volume1",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_volume1",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "vector"
+            }
+        },
+        {
+            "node_name": "volume1",
+            "node_type": "file",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/volume1",
+            "parameters": {
+                "source": "file",
+                "filename": "$HSHADERTOY_HOUDINI/pic/named/`chs(\"../asset3\")`",
+                "clonename": "",
+                "clonesession": "",
+                "clonemenu": "",
+                "liverenderpath": "",
+                "liverenderstart": "0",
+                "liverenderstop": "0",
+                "reload": "0",
+                "videoframemethod": "start",
+                "videoframestart": 1,
+                "videoframe": {
+                    "expression": "$F"
+                },
+                "setudim": false,
+                "udim": 1001,
+                "border": "default",
+                "missingdata": "color",
+                "missingcolorr": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorg": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorb": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolora": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "colorspace": "raw",
+                "premultiplied": false,
+                "loadcamera": false,
+                "addaovs": "0",
+                "aovs": [
+                    {
+                        "aov#": "C",
+                        "type#": "vector4",
+                        "precision#": "default",
+                        "raw#": false
+                    }
+                ],
+                "aov1": "C",
+                "type1": "vector4",
+                "precision1": "default",
+                "raw1": false
+            }
+        },
+        {
+            "node_name": "ctype_video1",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_video1",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "color"
+            }
+        },
+        {
+            "node_name": "video1",
+            "node_type": "file",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/video1",
+            "parameters": {
+                "source": "file",
+                "filename": "$HSHADERTOY_HOUDINI/pic/named/`chs(\"../asset4\")`",
+                "clonename": "",
+                "clonesession": "",
+                "clonemenu": "",
+                "liverenderpath": "",
+                "liverenderstart": "0",
+                "liverenderstop": "0",
+                "reload": "0",
+                "videoframemethod": "start",
+                "videoframestart": 1,
+                "videoframe": {
+                    "expression": "$F"
+                },
+                "setudim": false,
+                "udim": 1001,
+                "border": "default",
+                "missingdata": "color",
+                "missingcolorr": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorg": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolorb": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "missingcolora": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "colorspace": "raw",
+                "premultiplied": false,
+                "loadcamera": false,
+                "addaovs": "0",
+                "aovs": [
+                    {
+                        "aov#": "C",
+                        "type#": "vector4",
+                        "precision#": "default",
+                        "raw#": false
+                    }
+                ],
+                "aov1": "C",
+                "type1": "vector4",
+                "precision1": "default",
+                "raw1": false
+            }
+        },
+        {
+            "node_name": "monotorgba1",
+            "node_type": "monotorgba",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba1",
+            "parameters": {
+                "alphaextend": "value",
+                "alphaval": 1.0
+            }
+        },
+        {
+            "node_name": "font1",
+            "node_type": "font",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/font1",
+            "parameters": {
+                "file": "Lato",
+                "text": "music\n`chs(\"../asset5\")`",
+                "output": "mask",
+                "dosmooth": true,
+                "folder0": 0,
+                "smoothunits": "pixels",
+                "smooth": 0.01,
+                "smooth_pixel": 1.5,
+                "halign": "center",
+                "valign": "middle",
+                "use_descender": false,
+                "fontsize": 0.1,
+                "tx": [
+                    0.0,
+                    0.0
+                ],
+                "ty": [
+                    0.0,
+                    0.0
+                ],
+                "rz": 0.0,
+                "sx": [
+                    1.0,
+                    1.0
+                ],
+                "sy": [
+                    1.0,
+                    1.0
+                ],
+                "tracking": 0.0,
+                "leading": 0.0,
+                "oblique": 0.0,
+                "lod": 1.0
+            }
+        },
+        {
+            "node_name": "layer1",
+            "node_type": "layer",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/layer1",
+            "parameters": {
+                "signature": "f1",
+                "f1": 0.0,
+                "f21": [
+                    1.0,
+                    1.0
+                ],
+                "f22": [
+                    1.0,
+                    1.0
+                ],
+                "f3r": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f3g": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f3b": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4r": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4g": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4b": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "f4a": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "i": 0,
+                "setres": true,
+                "resx": [
+                    512.0,
+                    512.0
+                ],
+                "resy": [
+                    512.0,
+                    512.0
+                ],
+                "resmenu": 0,
+                "setpixelaspectratio": false,
+                "pixelaspectratio": 1.0,
+                "folder0": 0,
+                "setpixelpad": false,
+                "pixelpad_h1": [
+                    0,
+                    0
+                ],
+                "pixelpad_h2": [
+                    0,
+                    0
+                ],
+                "pixelpad_v1": [
+                    0,
+                    0
+                ],
+                "pixelpad_v2": [
+                    0,
+                    0
+                ],
+                "setprecision": false,
+                "precision": "b32",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": false,
+                "typeinfo": "none",
+                "setpixelscale": false,
+                "pixelscale": 1.0
+            }
+        },
+        {
+            "node_name": "ctype_music",
+            "node_type": "layerproperties",
+            "node_path": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_music",
+            "parameters": {
+                "signature": "auto",
+                "setprecision": false,
+                "precision": "b16",
+                "usefixedpoint": false,
+                "setborder": false,
+                "border": "wrap",
+                "settypeinfo": true,
+                "typeinfo": "color"
+            }
+        }
+    ],
+    "connections": [
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/font2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/font2",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/layer2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_misc",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 2,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 3,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 4,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 5,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/bufferA_default",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 6,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/bufferB_default",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 7,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/bufferC_default",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 8,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/bufferD_default",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch2",
+            "dst_input_index": 9,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/cubeA_default",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferA_default",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "src_output_index": 1
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferA_default",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferB_default",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "src_output_index": 2
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferB_default",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferC_default",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "src_output_index": 3
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferC_default",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferD_default",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "src_output_index": 4
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/bufferD_default",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/cubeA_default",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/input1",
+            "src_output_index": 5
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/cubeA_default",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture_type_color1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/texture2",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/output1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/vflip10",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_misc",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 1,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture_type_color1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 2,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_cubemap1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 3,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_volume1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 4,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_video1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "dst_input_index": 5,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_music",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture3",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/switch1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/vflip10",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_texture3",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_cubemap1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/cubemap1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_volume1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/volume1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_video1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/video1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/font1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/font1",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/layer1",
+            "src_output_index": 0
+        },
+        {
+            "dst": "/obj/London/shadertoy1/bufferA_iChannel0/ctype_music",
+            "dst_input_index": 0,
+            "src": "/obj/London/shadertoy1/bufferA_iChannel0/monotorgba1",
+            "src_output_index": 0
+        }
+    ]
+}

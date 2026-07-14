@@ -118,6 +118,13 @@ DEFINE_UNARY(GLSL_inversesqrt, rsqrt)
 
 // ---------- Common ----------
 DEFINE_UNARY (GLSL_abs,   fabs)
+// GLSL abs() also accepts genIType (int, ivec2..4). OpenCL abs(intN) returns
+// the UNSIGNED type, so convert back to preserve GLSL's signed result. Only
+// the vector forms are added (a passing shader can't have an int-vector arg —
+// it had no viable overload before — so this is regression-free).
+__GLSL_OVER int2 GLSL_abs(int2 x){ return convert_int2(abs(x)); }
+__GLSL_OVER int3 GLSL_abs(int3 x){ return convert_int3(abs(x)); }
+__GLSL_OVER int4 GLSL_abs(int4 x){ return convert_int4(abs(x)); }
 DEFINE_UNARY (GLSL_sign,  sign)
 DEFINE_UNARY (GLSL_floor, floor)
 DEFINE_UNARY (GLSL_ceil,  ceil)
@@ -147,6 +154,15 @@ __GLSL_OVER float4 GLSL_clamp(float4 x, float  a, float  b){ return clamp(x,(flo
 __GLSL_OVER float2 GLSL_clamp(float  x, float2 a, float2 b){ return clamp((float2)(x),a,b); }
 __GLSL_OVER float3 GLSL_clamp(float  x, float3 a, float3 b){ return clamp((float3)(x),a,b); }
 __GLSL_OVER float4 GLSL_clamp(float  x, float4 a, float4 b){ return clamp((float4)(x),a,b); }
+// GLSL clamp() genIType overloads (OpenCL clamp() supports integer gentypes
+// directly). Vector forms only — see the GLSL_abs note above for why this is
+// regression-free.
+__GLSL_OVER int2 GLSL_clamp(int2 x, int2 a, int2 b){ return clamp(x,a,b); }
+__GLSL_OVER int3 GLSL_clamp(int3 x, int3 a, int3 b){ return clamp(x,a,b); }
+__GLSL_OVER int4 GLSL_clamp(int4 x, int4 a, int4 b){ return clamp(x,a,b); }
+__GLSL_OVER int2 GLSL_clamp(int2 x, int a, int b){ return clamp(x,(int2)(a),(int2)(b)); }
+__GLSL_OVER int3 GLSL_clamp(int3 x, int a, int b){ return clamp(x,(int3)(a),(int3)(b)); }
+__GLSL_OVER int4 GLSL_clamp(int4 x, int a, int b){ return clamp(x,(int4)(a),(int4)(b)); }
 
 // step(edge, x)  (OpenCL has step)
 DEFINE_BINARY(GLSL_step, step)
@@ -176,10 +192,12 @@ __GLSL_OVER float  GLSL_distance(float2 a, float2 b){ return distance(a,b); }
 __GLSL_OVER float  GLSL_distance(float3 a, float3 b){ return distance(a,b); }
 __GLSL_OVER float  GLSL_distance(float4 a, float4 b){ return distance(a,b); }
 
+__GLSL_OVER float  GLSL_dot(float  a, float  b){ return a * b; }  // GLSL: scalar dot(a,b) == a*b
 __GLSL_OVER float  GLSL_dot(float2 a, float2 b){ return dot(a,b); }
 __GLSL_OVER float  GLSL_dot(float3 a, float3 b){ return dot(a,b); }
 __GLSL_OVER float  GLSL_dot(float4 a, float4 b){ return dot(a,b); }
 
+__GLSL_OVER float  GLSL_normalize(float  x){ return sign(x); }  // GLSL: x/length(x) == x/|x| == sign(x) (x==0 is UB in GLSL; sign->0)
 __GLSL_OVER float2 GLSL_normalize(float2 x){ return normalize(x); }
 __GLSL_OVER float3 GLSL_normalize(float3 x){ return normalize(x); }
 __GLSL_OVER float4 GLSL_normalize(float4 x){ return normalize(x); }

@@ -1,0 +1,9 @@
+clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE
+
+Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2524be6df40>:
+
+<kernel>:1528:22: error: initializer element is not a compile-time constant
+const float ROOT_3 = GLSL_sqrt(3.0f);
+                     ^~~~~~~~~~~~~~~
+
+(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\Users\artur\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyopencl\cl)

@@ -20,17 +20,24 @@ two *host scripts* drive it by importing internals:
   — the shipping Houdini path, a drifted near-duplicate of Host A. **A
   package fix is not shipped until Host B has it too** — check both.
 
-Host A flow per shader pass: Common merged by string-concat →
-`preprocessor/preprocessor_transformer.py` regex-rewrites `#define` bodies and
-conditional-block lines (macros are NEVER expanded) → parse + text-split
-around `mainImage` → header: parse → `transformer/ast_transformer.py`
-(`ASTTransformer.transform`) → `codegen/opencl_emitter.py`
-(`OpenCLEmitter.emit`) → regex post-pass `post_process_ifdef_blocks` → kernel:
-body re-wrapped in a synthetic `mainImage`, transformed by the SAME
-transformer instance (registries must persist — don't re-instantiate), emitted,
-then the emitted OpenCL is re-parsed with the GLSL grammar to slice the body
-out, `'*fragColor'→'fragColor'` substring fixups, regex post-pass, hoisted
-global-init assignments prepended.
+Host A flow per shader pass (single-TU entry-point model since 2026-07-08 —
+`docs/handover/ENTRYPOINT_REDESIGN.md`): Common merged by string-concat →
+`normalize_entry_point()` rewrites unconventional entries (macro-entry
+`#define main() mainImage(...)`, bare `void main()`+`gl_*`) into a standard
+`mainImage` → `preprocessor/preprocessor_transformer.py` regex-rewrites
+`#define` bodies and conditional-block lines (macros are NEVER expanded) →
+**ONE parse of the whole source** → **ONE** `ASTTransformer.transform` of the
+whole translation unit in source order → `partition_translation_unit()` splits
+the IR into the `mainImage` definition vs everything else (post-mainImage code
+stays in the header; alternate entries after mainImage are dropped) → header
+emitted from IR + regex post-pass `post_process_ifdef_blocks` → kernel = the
+entry's body STATEMENTS emitted directly from IR (entry params are never
+pointerized — `transformer.entry_function`; custom param names bridged by
+alias injection + a trailing `fragColor = O;`) → regex post-pass → hoisted
+global-init assignments prepended. There is no text-split, no synthetic
+re-wrap, no re-parse of emitted OpenCL, and no `'*fragColor'` substring
+surgery anymore — if you see references to those, the doc you're reading
+predates the redesign.
 
 Compile: `tests/compilecl.py` concatenates `tests/ocl/main_header.cl` + shader
 header + `main_kernel.cl` (an UNCLOSED kernel prefix) + kernel body + literal
@@ -67,7 +74,7 @@ code_generator.py`, `parser/preprocessor.py`, `analyzer/metadata.py` (all dead).
    in → expected OpenCL substring out; copy a neighboring file's imports —
    they use `from src.glsl_to_opencl...`, no install needed).
 3. Implement minimally, matching surrounding style.
-4. `python -m pytest tests/unit/ -q` — must be fully green (~1,672+6 skips;
+4. `python -m pytest tests/unit/ -q` — must be fully green (~1,807+6 skips;
    note `pytest.ini` sets `filterwarnings = error` with Deprecation/
    PendingDeprecation explicitly ignored — so any OTHER stray warning
    category fails the suite).
@@ -120,3 +127,12 @@ helpers masquerade as unrelated compile errors.
   fixture); `test_dummy.py` fails if the untracked
   `tests/fixtures/{simple_shaders,complex_shaders,reference_images}` dirs
   vanish — recreate them, it's not your regression.
+- **The spliced kernel body makes entry-body `return;` dangerous**: a bare
+  `return;` exits the KERNEL, skipping the trailing `AT_fragColor_set` and
+  (for custom-named entries) the `fragColor = O;` epilogue — silent
+  wrong-render, invisible to the compile gate. Known, catalogued with a fix
+  design in `docs/handover/ENTRYPOINT_REDESIGN.md` §8 (F4/S4).
+- **What Shadertoy itself guarantees user code** (forced alpha=1 on Image
+  passes, pixel-center fragCoord, `HW_PERFORMANCE`, `st_assert`, …) is
+  documented with line refs in `docs/handover/SHADERTOY_SITE_NOTES.md` —
+  check it before assuming a render difference is a transpiler bug.

@@ -402,7 +402,7 @@ class SamplerOptionsPopup(QDialog):
         """Populate controls from sampler state dict."""
         self.filter_combo.setCurrentText(sampler_state.get('filter', 'mipmap'))
         self.wrap_combo.setCurrentText(sampler_state.get('wrap', 'repeat'))
-        vflip_value = str(sampler_state.get('vflip', 'false')).lower()
+        vflip_value = str(sampler_state.get('vflip', 'true')).lower()
         self.vflip_checkbox.setChecked(vflip_value in ('true', '1', 'yes'))
 
     def get_values(self):
@@ -507,7 +507,7 @@ class RenderPassTab(QWidget):
                 sampler = {
                     'filter': sampler_state.get('filter', 'mipmap'),
                     'wrap': sampler_state.get('wrap', 'repeat'),
-                    'vflip': sampler_state.get('vflip', 'false'),
+                    'vflip': sampler_state.get('vflip', 'true'),
                     'srgb': sampler_state.get('srgb', 'false'),
                     'internal': sampler_state.get('internal', 'byte')
                 }
@@ -533,10 +533,12 @@ class RenderPassTab(QWidget):
 
     def _default_sampler_state(self):
         """Return default sampler configuration for a channel."""
+        # Defaults mirror the shadertoy.com web IDE (vflip is ON there) so
+        # shaders authored here match the site when copied across manually.
         return {
             'filter': 'mipmap',
             'wrap': 'repeat',
-            'vflip': 'false',
+            'vflip': 'true',
             'srgb': 'false',
             'internal': 'byte'
         }
@@ -715,9 +717,12 @@ class ShadertoyEditor(QDialog):
         # Clear existing tabs
         self.tab_widget.clear()
 
-        # Add render passes
+        # Add render passes. Old API shaders return name="" - derive the
+        # canonical name from the pass type (the builder skips nameless
+        # passes, which used to build a default-state HDA from these).
+        from hshadertoy.builder.builder import _resolve_renderpass_name
         for renderpass in shader_data.get('renderpass', []):
-            pass_name = renderpass.get('name', 'Unknown')
+            pass_name = _resolve_renderpass_name(renderpass) or 'Unknown'
             self.add_renderpass_tab(pass_name, renderpass)
 
     def add_renderpass_tab(self, name, pass_data=None):

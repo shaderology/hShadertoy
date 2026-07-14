@@ -101,3 +101,5 @@ After the campaigns wind down, the plan is in `docs/handover/ROADMAP.md`
 | Fetch shaders / API 403s / budget | `shadertoy-api` |
 | Prove render correctness (build the image diff) | `render-compare` |
 | Plan post-campaign work / refactoring | `docs/handover/ROADMAP.md` + `TRANSPILER_REVIEW.md` |
+| What Shadertoy ITSELF does (headers, main(), alpha, fragCoord) | `docs/handover/SHADERTOY_SITE_NOTES.md` |
+| Entry-point model (single-TU pipeline) + its open F-items | `docs/handover/ENTRYPOINT_REDESIGN.md` |

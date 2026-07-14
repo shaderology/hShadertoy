@@ -116,18 +116,23 @@ class CodeEmitter:
         """Emit unary operation."""
         operand = self.emit(node.operand)
 
-        # Handle prefix vs postfix for ++ and --
-        if node.operator in ['++', '--']:
-            # For now, assume prefix (will be refined in Session 6)
-            return f"{node.operator}{operand}"
-        else:
-            # Standard unary: -, +, !, ~
-            return f"{node.operator}{operand}"
+        # A '+'/'-' operator over an operand whose emitted form starts with
+        # '+'/'-' must keep a space, else the two glue into '--'/'++' which C
+        # lexes as inc/decrement ("expression is not assignable").
+        sep = ' ' if (node.operator[-1] in '+-' and operand[:1] in '+-') else ''
+        return f"{node.operator}{sep}{operand}"
 
     def emit_ParenthesizedExpression(self, node: IR.ParenthesizedExpression) -> str:
         """Emit parenthesized expression - always emit parentheses."""
         inner = self.emit(node.expression)
         return f"({inner})"
+
+    def emit_CommaExpression(self, node: IR.CommaExpression) -> str:
+        """Emit a comma (sequence) expression `a, b` (parens come from the
+        enclosing ParenthesizedExpression)."""
+        left = self.emit(node.left)
+        right = self.emit(node.right)
+        return f"{left}, {right}"
 
     def emit_CallExpression(self, node: IR.CallExpression) -> str:
         """Emit function call."""
@@ -206,6 +211,11 @@ class CodeEmitter:
     def emit_MemberAccess(self, node: IR.MemberAccess) -> str:
         """Emit member access (swizzling)."""
         base = self.emit(node.base)
+        # A unary base (e.g. a dereferenced pointer param *p) needs parens so
+        # member/swizzle binds to the deref: (*p).x, not *p.x = *(p.x).
+        # (Mirrors codegen/opencl_emitter.py.)
+        if isinstance(node.base, IR.UnaryOp):
+            base = f"({base})"
         return f"{base}.{node.member}"
 
     def emit_ArrayAccess(self, node: IR.ArrayAccess) -> str:
@@ -217,9 +227,18 @@ class CodeEmitter:
     def emit_TernaryOp(self, node: IR.TernaryOp) -> str:
         """Emit ternary conditional."""
         condition = self.emit(node.condition)
-        true_expr = self.emit(node.true_expr)
-        false_expr = self.emit(node.false_expr)
+        true_expr = self._emit_ternary_branch(node.true_expr)
+        false_expr = self._emit_ternary_branch(node.false_expr)
         return f"{condition} ? {true_expr} : {false_expr}"
+
+    def _emit_ternary_branch(self, node: IR.TransformedNode) -> str:
+        """Emit a ternary operand, parenthesizing an assignment branch so
+        C/OpenCL keeps GLSL's `cond ? a=b : c=d` grouping (else it reparses as
+        `(cond ? a=b : c) = d` — "expression is not assignable")."""
+        code = self.emit(node)
+        if isinstance(node, IR.AssignmentOp):
+            code = f"({code})"
+        return code
 
     def emit_AssignmentOp(self, node: IR.AssignmentOp) -> str:
         """Emit assignment."""
@@ -534,10 +553,11 @@ class CodeEmitter:
         else:
             parts.append(node.type_name)
 
-        # Name (array params carry their bracket suffix: float3 pts[4])
+        # Name (array params carry their bracket suffix: float3 pts[4]).
+        # Unnamed prototype params (`float Fn(float3);`) emit the type alone.
         if node.array_suffix:
             parts.append(node.name + node.array_suffix)
-        else:
+        elif node.name:
             parts.append(node.name)
 
         return ' '.join(parts)
@@ -546,6 +566,14 @@ class CodeEmitter:
         """Emit function definition."""
         # Signature
         params = ', '.join(self.emit(p) for p in node.parameters)
+
+        # Prototype / forward declaration (category S): no body, emit `sig;`.
+        if node.is_prototype:
+            result = f"{node.return_type} {node.name}({params});"
+            if node.overloadable:
+                result = "__attribute__((overloadable))\n" + result
+            return result
+
         result = f"{node.return_type} {node.name}({params}) "
 
         # OpenCL C has no overloading; user functions are marked overloadable so
@@ -562,6 +590,10 @@ class CodeEmitter:
     # ========================================================================
     # Top-Level
     # ========================================================================
+
+    def emit_Comment(self, node: IR.Comment) -> str:
+        """Emit a preserved file-scope comment verbatim (license/attribution)."""
+        return f"{node.text}\n"
 
     def emit_TranslationUnit(self, node: IR.TranslationUnit) -> str:
         """Emit translation unit (entire program)."""

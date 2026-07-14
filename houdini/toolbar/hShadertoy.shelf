@@ -6,11 +6,11 @@
  a single file. -->
 
   <toolshelf name="hShadertoy" label="hShadertoy">
-    <memberTool name="templateSave"/>
-    <memberTool name="templateLoad"/>
     <memberTool name="editor"/>
     <memberTool name="shadertoy0"/>
     <memberTool name="cubemappack_hda"/>
+    <memberTool name="templateLoad"/>
+    <memberTool name="templateSave"/>
   </toolshelf>
 
   <tool name="templateLoad" label="Template Load" icon="TOP_jsoninput">

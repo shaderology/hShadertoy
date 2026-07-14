@@ -1,0 +1,56 @@
+Traceback (most recent call last):
+  File "C:\dev\hShadertoy\tests\transpile.py", line 350, in transpile
+    kernel_ir = transformer.transform(kernel_ast)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 159, in transform
+    transformed = self._transform_node(decl)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 1825, in _transform_function_definition
+    body = self._transform_node(body_node)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 1761, in _transform_compound_statement
+    transformed = self._transform_node(stmt)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 1435, in _transform_expression_statement
+    expr = self._transform_node(expr_node)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 1302, in _transform_assignment_expression
+    value = self._transform_node(value_node) if value_node else None
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 850, in _transform_binary_expression
+    left = self._transform_node(node.left)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 222, in _transform_node
+    return method(node)
+           ^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 996, in _transform_call_expression
+    return self._transform_matrix_constructor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\src\glsl_to_opencl\transformer\ast_transformer.py", line 1162, in _transform_matrix_constructor
+    raise TransformationError(
+src.glsl_to_opencl.transformer.ast_transformer.TransformationError: Invalid number of arguments for mat2 constructor: 3 at line 8, column 13
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\dev\hShadertoy\tests\phase1_harness.py", line 69, in main
+    result = transpile(glsl)
+             ^^^^^^^^^^^^^^^
+  File "C:\dev\hShadertoy\tests\transpile.py", line 354, in transpile
+    raise TranspileError(f"Failed to transform kernel: {e}")
+tests.transpile.TranspileError: Failed to transform kernel: Invalid number of arguments for mat2 constructor: 3 at line 8, column 13

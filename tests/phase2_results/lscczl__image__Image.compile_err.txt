@@ -1,0 +1,12 @@
+clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE
+
+Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x25e769a13c0>:
+
+<kernel>:1724:35: error: invalid operands to binary expression ('matrix2x2' and 'float')
+    M = GLSL_mul_vec2_mat2(M, rot * 2.f);
+                              ~~~ ^ ~~~
+<kernel>:1732:46: warning: implicit conversion from 'float' to 'int' changes value from 0.69999999 to 0
+    float fft = texelFetch(iChannel0, (int2)(.7f, 0), 0).x;
+                                            ~^~~
+
+(options: -I C:/dev/hShadertoy/houdini/ocl/include -I C:/PROGRA~1/SIDEEF~1/HOUDIN~1.440/houdini/ocl/include -I C:/dev/hShadertoy/tests/ocl -D __H_CPU__ -D __H_INTEL__ -DFILTER_BOX -D_RUNOVER_LAYER=_bound_fragColor_layer -DHAS_size_ref -DALIGNED_size_ref -DCONSTANT_size_ref -D_bound_size_ref_border=IMX_WRAP -D_bound_size_ref_storage=FLOAT32 -D_bound_size_ref_channels=1 -D_bound_fragColor_storage=FLOAT32 -D_bound_fragColor_channels=4 -I C:\Users\artur\AppData\Local\Programs\Python\Python311\Lib\site-packages\pyopencl\cl)

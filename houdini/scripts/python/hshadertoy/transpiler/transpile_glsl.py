@@ -4,8 +4,13 @@ Production GLSL to OpenCL Transpiler for Houdini
 Wraps the core transpiler (src/glsl_to_opencl) and formats output for
 Houdini's @KERNEL structure.
 
-Phase 2 of Houdini Integration
+Single-translation-unit entry-point model (docs/handover/
+ENTRYPOINT_REDESIGN.md): one parse + one transform of the whole source;
+the header/body split happens on transformed IR (no brace-counting over
+emitted text, no '*fragColor' substring surgery). Mirrors Host A
+(tests/transpile.py) — keep the two in sync.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -16,8 +21,20 @@ sys.path.insert(0, 'C:/dev/hShadertoy')
 from src.glsl_to_opencl.parser import GLSLParser
 from src.glsl_to_opencl.analyzer import TypeChecker, create_builtin_symbol_table
 from src.glsl_to_opencl.transformer.ast_transformer import ASTTransformer
+from src.glsl_to_opencl.transformer import transformed_ast as IR
 from src.glsl_to_opencl.codegen.opencl_emitter import OpenCLEmitter
-from src.glsl_to_opencl.preprocessor import PreprocessorTransformer
+from src.glsl_to_opencl.preprocessor import (
+    PreprocessorTransformer,
+    append_uniform_undefs,
+    collect_uniform_redefines,
+    uniform_redefine_prefix,
+)
+
+# Shadertoy renderpass entry points. A pass's own entry is split out for the
+# @KERNEL body; the OTHER entries are excluded when they appear after it
+# (they were never part of the emitted header), but kept before it — some
+# shaders define mainVR first and CALL it from mainImage.
+ENTRY_POINTS = {"mainImage", "mainCubemap", "mainSound", "mainVR"}
 
 
 class TranspilationError(Exception):
@@ -25,79 +42,62 @@ class TranspilationError(Exception):
     pass
 
 
-def _normalize_main_image(glsl_source: str) -> str:
+def _normalize_entry_point(glsl_source: str) -> str:
     """
-    Rewrite a custom-named mainImage to the standard fragColor/fragCoord form.
+    Rewrite unconventional Shadertoy entry idioms into a standard
+    `void mainImage(out vec4 fragColor, in vec2 fragCoord)` shader
+    (entry-point redesign S2; mirror of Host A's normalize_entry_point).
 
-    Shadertoy permits custom parameter names (golf shaders often use
-    ``void mainImage(out vec4 O, vec2 U)``), but the Houdini kernel always
-    exposes ``fragColor``/``fragCoord``. Rather than renaming identifiers in the
-    body (which risks clobbering same-named locals in nested scopes), we keep the
-    body verbatim and bridge the names with alias declarations plus a final write
-    to ``fragColor``::
+    (a) macro-entry: `#define main() mainImage(...)` (+ gl_* object macros)
+        — expand and drop (our preprocessor pass never expands macros);
+    (b) bare `void main(void)` with gl_FragColor/gl_FragCoord — rewrite the
+        signature, map gl_FragColor to the out param, provide gl_FragCoord
+        as a file-scope global set at the top of the entry body.
 
-        void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-            vec4 O = vec4(0.0, 0.0, 0.0, 1.0);   // out alias
-            vec2 U = fragCoord;                  // in alias
-            ...original body...
-            fragColor = O;                       // final write
-        }
-
-    The downstream transform/split/pointer-fix is then name-agnostic. Standard
-    signatures are returned unchanged.
+    Sources already defining any conventional entry are returned unchanged.
     """
-    parser = GLSLParser()
-    try:
-        ast = parser.parse(glsl_source)
-    except Exception:
+    if re.search(r'\b(?:void\s+mainImage|void\s+mainCubemap|vec2\s+mainSound)\s*\(',
+                 glsl_source):
         return glsl_source
 
-    main = None
-    for node in ast.named_children:
-        if node.type == "function_definition" and node.name == "mainImage":
-            main = node
-            break
-    if main is None:
-        return glsl_source
+    src = glsl_source
 
-    params = main.parameters
-    out_name, in_name = "fragColor", "fragCoord"
-    if len(params) >= 1:
-        decl = params[0].child_by_field_name("declarator")
-        if decl is not None and decl.type == "identifier" and decl.text:
-            out_name = decl.text.strip()
-    if len(params) >= 2:
-        decl = params[1].child_by_field_name("declarator")
-        if decl is not None and decl.type == "identifier" and decl.text:
-            in_name = decl.text.strip()
+    # --- idiom (a): #define main() <replacement containing mainImage> ------
+    m = re.search(
+        r'^[ \t]*#[ \t]*define[ \t]+main[ \t]*\([ \t]*\)[ \t]+(.*\bmainImage\b.*)$',
+        src, re.MULTILINE)
+    if m:
+        replacement = m.group(1).strip()
+        src = src[:m.start()] + src[m.end():]          # drop the define
+        src = re.sub(r'\bmain[ \t]*\([ \t]*\)', replacement, src)
+        for gl_name in ('gl_FragCoord', 'gl_FragColor'):
+            dm = re.search(
+                r'^[ \t]*#[ \t]*define[ \t]+' + gl_name + r'[ \t]+(\S+)[ \t]*$',
+                src, re.MULTILINE)
+            if dm:
+                alias = dm.group(1)
+                src = src[:dm.start()] + src[dm.end():]
+                src = re.sub(r'\b' + gl_name + r'\b', alias, src)
+        return src
 
-    if out_name == "fragColor" and in_name == "fragCoord":
-        return glsl_source
+    # --- idiom (b): bare void main(void?) -----------------------------------
+    sig = re.search(r'\bvoid\s+main\s*\(\s*(?:void)?\s*\)', src)
+    if not sig:
+        return glsl_source  # nothing we recognize
 
-    body = main.body
-    if body is None:
-        return glsl_source
+    src = (src[:sig.start()]
+           + "void mainImage(out vec4 fragColor, in vec2 fragCoord)"
+           + src[sig.end():])
+    src = re.sub(r'\bgl_FragColor\b', 'fragColor', src)
 
-    inner = body.text.strip()
-    if inner.startswith("{") and inner.endswith("}"):
-        inner = inner[1:-1]
-
-    out_alias = f"    vec4 {out_name} = vec4(0.0, 0.0, 0.0, 1.0);\n" if out_name != "fragColor" else ""
-    in_alias = f"    vec2 {in_name} = fragCoord;\n" if in_name != "fragCoord" else ""
-    finalize = f"\n    fragColor = {out_name};" if out_name != "fragColor" else ""
-
-    new_fn = (
-        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
-        f"{out_alias}{in_alias}{inner}{finalize}\n"
-        "}"
-    )
-
-    # Splice by byte offsets so surrounding code (helpers, globals, comments) is
-    # preserved exactly.
-    src_bytes = glsl_source.encode("utf-8")
-    start = main._node.start_byte
-    end = main._node.end_byte
-    return src_bytes[:start].decode("utf-8") + new_fn + src_bytes[end:].decode("utf-8")
+    if re.search(r'\bgl_FragCoord\b', src):
+        body_open = re.search(r'void\s+mainImage\s*\([^)]*\)\s*\{', src)
+        insert_at = body_open.end()
+        src = ("vec4 gl_FragCoord;\n"
+               + src[:insert_at]
+               + "\n    gl_FragCoord = vec4(fragCoord, 0.0, 1.0);"
+               + src[insert_at:])
+    return src
 
 
 def _detect_renderpass_type(glsl_source: str) -> str:
@@ -118,106 +118,57 @@ def _detect_renderpass_type(glsl_source: str) -> str:
         return "Common"
 
 
-def _split_header_and_body(opencl_code: str, mode: str) -> tuple:
+def _partition_translation_unit(ir, entry_name):
     """
-    Split OpenCL code into header (declarations) and body (main function).
+    Split the transformed translation unit into the entry function and the
+    header declarations (mirror of Host A's partition_translation_unit).
+
+    Code AFTER the entry is kept in the header too (category S: prototype-
+    style shaders define helpers at the bottom of the file). The OTHER
+    Shadertoy entry points are excluded only when they come after the entry.
+    When several entry definitions exist, the LAST one wins.
 
     Returns:
-        (header, body) tuple
-
-    For Common renderpass, body will be empty.
+        (entry_function_ir_or_None, header_declarations)
     """
-    if mode == "Common":
-        # Common renderpass is all header, no body
-        return (opencl_code, "")
+    def is_definition(decl):
+        return (isinstance(decl, IR.FunctionDefinition)
+                and not getattr(decl, 'is_prototype', False))
 
-    # Find the main function
-    # Pattern: void mainImage(...) { ... }
-    # or: void mainCubemap(...) { ... }
+    entry_indices = [i for i, d in enumerate(ir.declarations)
+                     if is_definition(d) and d.name == entry_name]
+    if not entry_indices:
+        return None, list(ir.declarations)
+    first_entry, last_entry = entry_indices[0], entry_indices[-1]
+    entry_ir = ir.declarations[last_entry]
 
-    lines = opencl_code.split('\n')
-    main_func_start = -1
-    main_func_name = "mainImage" if mode == "mainImage" else mode
+    other_entries = ENTRY_POINTS - {entry_name}
+    header_declarations = []
+    for i, decl in enumerate(ir.declarations):
+        if is_definition(decl) and decl.name == entry_name:
+            continue  # last definition wins; all copies stay out of header
+        if (is_definition(decl) and i > first_entry
+                and decl.name in other_entries):
+            continue
+        header_declarations.append(decl)
 
-    # Find where main function starts
-    for i, line in enumerate(lines):
-        if f"void {main_func_name}" in line or f"float2 {main_func_name}" in line:
-            main_func_start = i
-            break
-
-    if main_func_start == -1:
-        # No main function found - treat as header only
-        return (opencl_code, "")
-
-    # Header: everything before main function
-    header = '\n'.join(lines[:main_func_start]).strip()
-
-    # Body: Extract function body (between { and })
-    # Start from function signature line
-    body_lines = []
-    brace_count = 0
-    in_body = False
-    function_complete = False
-
-    for i in range(main_func_start, len(lines)):
-        if function_complete:
-            break
-
-        line = lines[i]
-        line_to_add = []
-
-        # Process each character to track braces
-        for j, char in enumerate(line):
-            if char == '{':
-                brace_count += 1
-                if brace_count == 1:
-                    in_body = True
-                    # Start capturing after the opening brace
-                elif brace_count > 1:
-                    # Nested brace - include it
-                    line_to_add.append(char)
-            elif char == '}':
-                if brace_count == 1:
-                    # This is the closing brace of the main function
-                    in_body = False
-                    function_complete = True
-                    break
-                else:
-                    # Nested closing brace - include it
-                    line_to_add.append(char)
-                    brace_count -= 1
-            elif in_body and brace_count > 0:
-                # Regular character inside the function body
-                line_to_add.append(char)
-
-        # Add the processed line if we collected any content
-        if line_to_add:
-            body_lines.append(''.join(line_to_add))
-
-    body = '\n'.join(body_lines).strip()
-    return (header, body)
+    return entry_ir, header_declarations
 
 
-def _fix_houdini_pointers(body: str) -> str:
+def _entry_param_names(entry_ir):
     """
-    Replace pointer dereferences with direct variable access for Houdini.
-
-    In Houdini's @KERNEL context, fragColor is a pre-defined variable,
-    not a function parameter, so we don't use pointer syntax.
-
-    Args:
-        body: Function body with potential pointer dereferences
-
-    Returns:
-        Body with pointer syntax removed
+    The user's mainImage parameter names. Shadertoy permits custom names
+    (golf shaders use `out vec4 O, vec2 U`), but the Houdini @KERNEL always
+    exposes fragColor/fragCoord; the gap is bridged with alias declarations
+    rather than renaming identifiers in the body.
     """
-    # Replace *fragColor with fragColor
-    body = body.replace("*fragColor", "fragColor")
-
-    # May need to handle other out parameters in future
-    # (e.g., *outColor, *result, etc.)
-
-    return body
+    out_name, in_name = "fragColor", "fragCoord"
+    params = entry_ir.parameters or []
+    if len(params) >= 1 and params[0].name:
+        out_name = params[0].name
+    if len(params) >= 2 and params[1].name:
+        in_name = params[1].name
+    return out_name, in_name
 
 
 def _post_process_ifdef_blocks(opencl_code: str) -> str:
@@ -234,8 +185,6 @@ def _post_process_ifdef_blocks(opencl_code: str) -> str:
     Returns:
         Fixed OpenCL code with all GLSL types and functions transformed
     """
-    import re
-
     # Type transformations
     type_map = {
         r'\bvec2\b': 'float2',
@@ -289,7 +238,8 @@ def _format_for_houdini(header: str, body: str, mode: str) -> str:
 
     Args:
         header: Global declarations, functions, etc.
-        body: Main function body
+        body: Main function body (fragColor/fragCoord are @KERNEL locals;
+              the transformer never pointerizes the entry's params)
         mode: Renderpass type
 
     Returns:
@@ -298,9 +248,6 @@ def _format_for_houdini(header: str, body: str, mode: str) -> str:
     if mode == "Common":
         # Common renderpass: header only, no @KERNEL
         return header
-
-    # Fix pointer syntax for Houdini
-    body = _fix_houdini_pointers(body)
 
     # For mainImage, mainCubemap, etc: header + @KERNEL wrapper
     output = []
@@ -354,10 +301,9 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         raise TranspilationError("Invalid GLSL source: must be a non-empty string")
 
     try:
-        # Normalize custom mainImage parameter names (e.g. `out vec4 O, vec2 U`)
-        # to the standard fragColor/fragCoord via alias injection, so the rest of
-        # the pipeline is name-agnostic.
-        glsl_source = _normalize_main_image(glsl_source)
+        # Normalize unconventional entry idioms (macro-entry, bare void
+        # main() + gl_*) before mode detection so they become mainImage.
+        glsl_source = _normalize_entry_point(glsl_source)
 
         # Auto-detect mode if not provided
         if mode is None:
@@ -367,7 +313,7 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         preprocessor = PreprocessorTransformer()
         glsl_processed = preprocessor.transform(glsl_source)
 
-        # Stage 2: Parse
+        # Stage 2: Parse — ONE parse of the whole source
         parser = GLSLParser()
         ast = parser.parse(glsl_processed)
 
@@ -375,27 +321,100 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         symbol_table = create_builtin_symbol_table()
         type_checker = TypeChecker(symbol_table)
 
-        # Stage 4: Transform AST
+        # Stage 4: Transform the whole translation unit in source order.
         transformer = ASTTransformer(type_checker)
-        # The renderpass entry function's out-param (fragColor) is a host @KERNEL
-        # local, not a deref'able pointer (see ASTTransformer.entry_function).
+        # The renderpass entry function's out-param (fragColor) is a host
+        # @KERNEL local, not a deref'able pointer (see
+        # ASTTransformer.entry_function / entry_params_are_locals).
         transformer.entry_function = mode
-        transformed_ast = transformer.transform(ast)
+        ir = transformer.transform(ast)
 
-        # Stage 5: Emit OpenCL
+        # Category A — program-scope globals with non-constant initializers
+        # are declared bare; their real initializers are assigned at the top
+        # of the @KERNEL body (mirrors Host A; previously LOST in this host —
+        # TRANSPILER_REVIEW §0.2).
+        hoisted_global_inits = list(transformer.hoisted_global_inits)
+
         emitter = OpenCLEmitter(indent_size=4)
-        opencl_code = emitter.emit(transformed_ast)
 
-        # Stage 6: Post-process to fix code inside #ifdef blocks
-        # This is a workaround for Session 9's limitation where code inside #ifdef blocks
-        # is not transformed by the AST transformer
-        opencl_code = _post_process_ifdef_blocks(opencl_code)
+        if mode == "Common":
+            header_opencl = _post_process_ifdef_blocks(emitter.emit(ir))
+            return _format_for_houdini(header_opencl, "", mode)
 
-        # Split into header and body
-        header, body = _split_header_and_body(opencl_code, mode)
+        # Stage 5: Split entry vs header on IR and emit each.
+        entry_ir, header_decls = _partition_translation_unit(ir, mode)
+
+        header_opencl = ""
+        ag_redefines = {}
+        if header_decls:
+            header_opencl = emitter.emit(
+                IR.TranslationUnit(declarations=header_decls))
+            header_opencl = _post_process_ifdef_blocks(header_opencl)
+            # Category AG cluster 1 — confine any user #define of a read-only
+            # uniform (iTime/iFrame/...) with a trailing #undef so the
+            # @KERNEL's SHADERTOY_INPUTS assignments are not rewritten to
+            # non-lvalues. The suppressed macros' FINAL definitions are
+            # captured FIRST (before our #undef block lands in the text) and
+            # re-emitted at the top of the @KERNEL body below (push-pop: the
+            # entry body sits AFTER SHADERTOY_INPUTS and must still see the
+            # user's remap). Mirror of Host A tests/transpile.py. Fixes live
+            # Houdini with no HDA change.
+            # Definitions from the PREPROCESSED source (bodies already valid
+            # OpenCL); liveness from the RAW source (both the emitter and the
+            # preprocessor drop user #undef lines, which last-one-wins needs).
+            ag_redefines = collect_uniform_redefines(glsl_processed, glsl_source)
+            header_opencl = append_uniform_undefs(header_opencl)
+
+        if entry_ir is None:
+            # No entry found (defensive parity with the old line-scan split):
+            # treat everything as header.
+            return _format_for_houdini(header_opencl, "", mode)
+
+        body_emitter = OpenCLEmitter(indent_size=4)
+        body_emitter.indent_level = 1  # statements at function-body depth
+        body_stmts = entry_ir.body.statements if entry_ir.body else []
+        body = "".join(body_emitter.emit(s) for s in body_stmts).strip()
+
+        # Custom mainImage param names (out vec4 O, vec2 U): bridge with
+        # alias declarations + a final write to the @KERNEL fragColor.
+        if mode == "mainImage":
+            out_name, in_name = _entry_param_names(entry_ir)
+            out_alias = ""
+            in_alias = ""
+            out_finalize = ""
+            if out_name != "fragColor":
+                out_alias = (f"float4 {out_name} = "
+                             f"(float4)(0.0f, 0.0f, 0.0f, 1.0f);\n")
+                out_finalize = f"\nfragColor = {out_name};"
+            if in_name != "fragCoord":
+                in_alias = f"float2 {in_name} = fragCoord;\n"
+            if out_alias or in_alias or out_finalize:
+                body = f"{out_alias}{in_alias}    {body}{out_finalize}".strip()
+
+        body = _post_process_ifdef_blocks(body)
+
+        # Category A hoisted global initializers run first (declaration
+        # order, so inter-global dependencies hold).
+        if hoisted_global_inits:
+            hoist_emitter = OpenCLEmitter(indent_size=4)
+            hoist_lines = ["// ---- hoisted global initializers (category A) ----"]
+            for name, init_ir in hoisted_global_inits:
+                hoist_lines.append(f"{name} = {hoist_emitter.emit(init_ir)};")
+            body = "\n".join(hoist_lines) + "\n" + body
+
+        # Category AG push-pop — re-apply the user's uniform remaps at the
+        # very top of the @KERNEL body: SHADERTOY_INPUTS (emitted by
+        # _format_for_houdini just above the body) has already expanded, and
+        # nothing after the body assigns a uniform (only
+        # `@fragColor.set(fragColor);` follows), so the re-defined macro
+        # covers exactly the inlined user code (hoisted globals included —
+        # they are user code and saw the macro on Shadertoy).
+        ag_prefix = uniform_redefine_prefix(ag_redefines)
+        if ag_prefix:
+            body = ag_prefix + body
 
         # Format for Houdini
-        houdini_code = _format_for_houdini(header, body, mode)
+        houdini_code = _format_for_houdini(header_opencl, body, mode)
 
         return houdini_code
 

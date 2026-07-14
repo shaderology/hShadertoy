@@ -1,0 +1,4 @@
+# Rendered PNGs are reproducible (rc.py render-ref / render-hda) and heavy -
+# keep them out of git. Ledger + reports stay tracked.
+artifacts/
+tmp/

@@ -47,6 +47,31 @@ class TestArrayDeclarations:
         ast = parser.parse(source)
         assert ast is not None
 
+    def test_parse_type_first_array_named_size_param(self):
+        """Category P cluster 3d23WK: type-first array param with a named (non-digit) size.
+
+        `in vec2[N] poly` must normalize to `in vec2 poly[N]` (mirrors the
+        existing digit-size rewrite) so tree-sitter-glsl accepts it.
+        """
+        source = "float sdPoly(in vec2[N] poly, in vec2 p) { return 0.0; }"
+        parser = GLSLParser()
+        ast = parser.parse(source)
+        assert ast is not None
+
+    def test_parse_type_first_array_named_size_local(self):
+        """`vec2[N] poly;` local declaration with a named size."""
+        source = "void main() { vec2[N] poly; }"
+        parser = GLSLParser()
+        ast = parser.parse(source)
+        assert ast is not None
+
+    def test_parse_type_first_array_struct_named_size_param(self):
+        """MdKBDy: user-struct type-first array param `ball[BALLCOUNT] balls`."""
+        source = "struct ball { float r; };\nvec4 f(ball[BALLCOUNT] balls) { return vec4(0.0); }"
+        parser = GLSLParser()
+        ast = parser.parse(source)
+        assert ast is not None
+
     def test_parse_2d_array(self):
         """Test 2D array."""
         source = "void main() { float arr[10][20]; }"

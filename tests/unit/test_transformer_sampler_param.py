@@ -183,7 +183,7 @@ def test_out_param_alongside_sampler_still_pointer():
     )
     header, kernel = tp(glsl)
     assert "const IMX_Layer* s" in header
-    assert "__private float4* col" in header
+    assert "float4* col" in header
     # out-param write inside the body is dereferenced; sampler read is not.
     assert "*col" in header
     assert "*s" not in header

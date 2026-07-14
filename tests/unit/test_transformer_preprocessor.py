@@ -468,3 +468,125 @@ def test_pragma_directive_pass_through(transformer):
     source = "#pragma once"
     result = transformer.transform(source)
     assert result == source
+
+
+# ============================================================================
+# Category J: matrix constructors inside #define bodies / #if blocks
+# ============================================================================
+
+def test_define_mat2_rotation_ctor(transformer):
+    """mat2 rotation macro -> overloadable GLSL_mat2 (the crot idiom)."""
+    source = "#define crot(a) mat2(cos(a),-sin(a),sin(a),cos(a))"
+    result = transformer.transform(source)
+    assert "GLSL_mat2(GLSL_cos(a),-GLSL_sin(a),GLSL_sin(a),GLSL_cos(a))" in result
+    assert "mat2(" not in result.replace("GLSL_mat2(", "")
+
+
+def test_define_mat3_rotation_ctor(transformer):
+    """mat3 macro with nine scalar elements -> GLSL_mat3."""
+    source = "#define matRotateX(rad) mat3(1,0,0,0,cos(rad),-sin(rad),0,sin(rad),cos(rad))"
+    result = transformer.transform(source)
+    assert "GLSL_mat3(1,0,0,0,GLSL_cos(rad),-GLSL_sin(rad),0,GLSL_sin(rad),GLSL_cos(rad))" in result
+
+
+def test_define_mat2_from_vec4_ctor(transformer):
+    """mat2 built from a single vec4 (animated-rotation idiom) -> GLSL_mat2(float4)."""
+    source = "#define rot(a) mat2(cos(a+vec4(0,33,11,0)))"
+    result = transformer.transform(source)
+    assert "GLSL_mat2(GLSL_cos(a+(float4)(0,33,11,0)))" in result
+
+
+def test_define_mat4_ctor(transformer):
+    """mat4 ctor inside a #define -> GLSL_mat4."""
+    source = "#define I mat4(1.0)"
+    result = transformer.transform(source)
+    assert "GLSL_mat4(1.0f)" in result
+
+
+def test_mat_ctor_not_double_prefixed(transformer):
+    """An already-prefixed GLSL_mat2 must not become GLSL_GLSL_mat2."""
+    source = "#define M(a) GLSL_mat2(a)"
+    result = transformer.transform(source)
+    assert "GLSL_GLSL_mat2" not in result
+
+
+def test_bare_mat2_type_in_ifdef_block(transformer):
+    """Bare mat2 declaration inside a #ifdef block -> matrix2x2 (lddyzM).
+
+    Houdini typedefs the GLSL spelling `mat2` as float4, so a declaration left
+    untransformed inside a conditional block miscompiles; map the bare type."""
+    source = "#ifdef DEBUG_PATH\n    mat2 R = get_rotation(t);\n#endif"
+    result = transformer.transform(source)
+    assert "matrix2x2 R = get_rotation(t);" in result
+
+
+def test_bare_mat3_type_in_ifdef_block(transformer):
+    """Bare mat3 declaration inside a conditional block -> matrix3x3."""
+    source = "#if 1\n    mat3 m = foo();\n#endif"
+    result = transformer.transform(source)
+    assert "matrix3x3 m = foo();" in result
+
+
+def test_mat_ctor_inside_mul_identifier_untouched(transformer):
+    """`mat2` embedded in a longer identifier must not be rewritten."""
+    source = "#define R(v) v *= GLSL_mul_vec2_mat2(v, M)"
+    result = transformer.transform(source)
+    assert "GLSL_mul_vec2_mat2(v, M)" in result
+
+
+# ============================================================================
+# Category J: matrix-returning #define detection (macro return-type seeding)
+# ============================================================================
+
+def test_matrix_macro_recorded_mat2(transformer):
+    """A #define whose body is a mat2 ctor is recorded as matrix-returning."""
+    transformer.transform("#define rot(a) mat2(cos(a),-sin(a),sin(a),cos(a))")
+    assert transformer.matrix_macros == {"rot": "mat2"}
+
+
+def test_matrix_macro_recorded_mat3_object_like(transformer):
+    """Object-like matrix macro is recorded too."""
+    transformer.transform("#define I mat3(1.0)")
+    assert transformer.matrix_macros == {"I": "mat3"}
+
+
+def test_statement_macro_not_recorded(transformer):
+    """A macro that *applies* a matrix (v *= mat2(...)) returns void, not a
+    matrix — it must NOT be recorded as matrix-returning."""
+    transformer.transform("#define r(v,t) v *= mat2(cos(t),sin(t),-sin(t),cos(t))")
+    assert "r" not in transformer.matrix_macros
+
+
+def test_float_macro_wrapping_matrix_not_recorded(transformer):
+    """length(fract(p*=mat2(...))) returns a float; the outer call decides."""
+    transformer.transform("#define ff length(fract(p*=mat2(7,-5,5,7)) - .5)")
+    assert "ff" not in transformer.matrix_macros
+
+
+# ============================================================================
+# Category J: HLSL-alias vector ctors (float2(...)) inside macro / #if bodies
+# ============================================================================
+
+def test_hlsl_alias_ctor_in_define_body(transformer):
+    """float2(...) inside a #define body -> (float2)(...) (the keyPressed idiom).
+
+    `#define float2 vec2` makes the author write the OpenCL spelling directly;
+    AST call sites are aliased in ast_transformer, but macro bodies are
+    textual-only, so the preprocessor must cast them here."""
+    source = "#define keyPressed(k) (texture(ch,float2(k,0.25)).x>0.0)"
+    result = transformer.transform(source)
+    assert "(float2)(k,0.25f)" in result
+
+
+def test_hlsl_alias_ctor_in_ifdef_block(transformer):
+    """float3(...)/int3(...) inside a conditional block get cast too."""
+    source = "#ifdef LIGHT\n    float3 v = float3(int3(1,2,3));\n#endif"
+    result = transformer.transform(source)
+    assert "(float3)((int3)(1,2,3))" in result
+
+
+def test_hlsl_alias_ctor_not_double_wrapped(transformer):
+    """An already-cast (float2)(...) must not be re-wrapped."""
+    source = "#define M(a) (float2)(a, a)"
+    result = transformer.transform(source)
+    assert "(float2)((float2)" not in result

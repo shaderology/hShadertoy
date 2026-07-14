@@ -1,0 +1,36 @@
+{
+  "ver": "0.1",
+  "info": {
+    "id": "MdXSWn",
+    "date": "1399098998",
+    "viewed": 414761,
+    "name": "mandelbulb_",
+    "username": "EvilRyu",
+    "description": "a mandelbulb",
+    "likes": 278,
+    "published": 3,
+    "flags": 0,
+    "usePreview": 0,
+    "tags": [
+      "raymarching",
+      "fractal",
+      "cineshader"
+    ],
+    "hasliked": 0
+  },
+  "renderpass": [
+    {
+      "inputs": [],
+      "outputs": [
+        {
+          "id": 37,
+          "channel": 0
+        }
+      ],
+      "code": "// Created by evilryu\n// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.\n\n\n// whether turn on the animation\n//#define phase_shift_on \n\nfloat stime, ctime;\n void ry(inout vec3 p, float a){  \n \tfloat c,s;vec3 q=p;  \n  \tc = cos(a); s = sin(a);  \n  \tp.x = c * q.x + s * q.z;  \n  \tp.z = -s * q.x + c * q.z; \n }  \n\nfloat pixel_size = 0.0;\n\n/* \n\nz = r*(sin(theta)cos(phi) + i cos(theta) + j sin(theta)sin(phi)\n\nzn+1 = zn^8 +c\n\nz^8 = r^8 * (sin(8*theta)*cos(8*phi) + i cos(8*theta) + j sin(8*theta)*sin(8*theta)\n\nzn+1' = 8 * zn^7 * zn' + 1\n\n*/\n\nvec3 mb(vec3 p) {\n\tp.xyz = p.xzy;\n\tvec3 z = p;\n\tvec3 dz=vec3(0.0);\n\tfloat power = 8.0;\n\tfloat r, theta, phi;\n\tfloat dr = 1.0;\n\t\n\tfloat t0 = 1.0;\n\tfor(int i = 0; i < 7; ++i) {\n\t\tr = length(z);\n\t\tif(r > 2.0) continue;\n\t\ttheta = atan(z.y / z.x);\n        #ifdef phase_shift_on\n\t\tphi = asin(z.z / r) + iTime*0.1;\n        #else\n        phi = asin(z.z / r);\n        #endif\n\t\t\n\t\tdr = pow(r, power - 1.0) * dr * power + 1.0;\n\t\n\t\tr = pow(r, power);\n\t\ttheta = theta * power;\n\t\tphi = phi * power;\n\t\t\n\t\tz = r * vec3(cos(theta)*cos(phi), sin(theta)*cos(phi), sin(phi)) + p;\n\t\t\n\t\tt0 = min(t0, r);\n\t}\n\treturn vec3(0.5 * log(r) * r / dr, t0, 0.0);\n}\n\n vec3 f(vec3 p){ \n\t ry(p, iTime*0.2);\n     return mb(p); \n } \n\n\n float softshadow(vec3 ro, vec3 rd, float k ){ \n     float akuma=1.0,h=0.0; \n\t float t = 0.01;\n     for(int i=0; i < 50; ++i){ \n         h=f(ro+rd*t).x; \n         if(h<0.001)return 0.02; \n         akuma=min(akuma, k*h/t); \n \t\t t+=clamp(h,0.01,2.0); \n     } \n     return akuma; \n } \n\nvec3 nor( in vec3 pos )\n{\n    vec3 eps = vec3(0.001,0.0,0.0);\n\treturn normalize( vec3(\n           f(pos+eps.xyy).x - f(pos-eps.xyy).x,\n           f(pos+eps.yxy).x - f(pos-eps.yxy).x,\n           f(pos+eps.yyx).x - f(pos-eps.yyx).x ) );\n}\n\nvec3 intersect( in vec3 ro, in vec3 rd )\n{\n    float t = 1.0;\n    float res_t = 0.0;\n    float res_d = 1000.0;\n    vec3 c, res_c;\n    float max_error = 1000.0;\n\tfloat d = 1.0;\n    float pd = 100.0;\n    float os = 0.0;\n    float step = 0.0;\n    float error = 1000.0;\n    \n    for( int i=0; i<48; i++ )\n    {\n        if( error < pixel_size*0.5 || t > 20.0 )\n        {\n        }\n        else{  // avoid broken shader on windows\n        \n            c = f(ro + rd*t);\n            d = c.x;\n\n            if(d > os)\n            {\n                os = 0.4 * d*d/pd;\n                step = d + os;\n                pd = d;\n            }\n            else\n            {\n                step =-os; os = 0.0; pd = 100.0; d = 1.0;\n            }\n\n            error = d / t;\n\n            if(error < max_error) \n            {\n                max_error = error;\n                res_t = t;\n                res_c = c;\n            }\n        \n            t += step;\n        }\n\n    }\n\tif( t>20.0/* || max_error > pixel_size*/ ) res_t=-1.0;\n    return vec3(res_t, res_c.y, res_c.z);\n}\n\n void mainImage( out vec4 fragColor, in vec2 fragCoord ) \n { \n    vec2 q=fragCoord.xy/iResolution.xy; \n \tvec2 uv = -1.0 + 2.0*q; \n \tuv.x*=iResolution.x/iResolution.y; \n     \n    pixel_size = 1.0/(iResolution.x * 3.0);\n\t// camera\n \tstime=0.7+0.3*sin(iTime*0.4); \n \tctime=0.7+0.3*cos(iTime*0.4); \n\n \tvec3 ta=vec3(0.0,0.0,0.0); \n\tvec3 ro = vec3(0.0, 3.*stime*ctime, 3.*(1.-stime*ctime));\n\n \tvec3 cf = normalize(ta-ro); \n    vec3 cs = normalize(cross(cf,vec3(0.0,1.0,0.0))); \n    vec3 cu = normalize(cross(cs,cf)); \n \tvec3 rd = normalize(uv.x*cs + uv.y*cu + 3.0*cf);  // transform from view to world\n\n    vec3 sundir = normalize(vec3(0.1, 0.8, 0.6)); \n    vec3 sun = vec3(1.64, 1.27, 0.99); \n    vec3 skycolor = vec3(0.6, 1.5, 1.0); \n\n\tvec3 bg = exp(uv.y-2.0)*vec3(0.4, 1.6, 1.0);\n\n    float halo=clamp(dot(normalize(vec3(-ro.x, -ro.y, -ro.z)), rd), 0.0, 1.0); \n    vec3 col=bg+vec3(1.0,0.8,0.4)*pow(halo,17.0); \n\n\n    float t=0.0;\n    vec3 p=ro; \n\t \n\tvec3 res = intersect(ro, rd);\n\t if(res.x > 0.0){\n\t\t   p = ro + res.x * rd;\n           vec3 n=nor(p); \n           float shadow = softshadow(p, sundir, 10.0 );\n\n           float dif = max(0.0, dot(n, sundir)); \n           float sky = 0.6 + 0.4 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0))); \n \t\t   float bac = max(0.3 + 0.7 * dot(vec3(-sundir.x, -1.0, -sundir.z), n), 0.0); \n           float spe = max(0.0, pow(clamp(dot(sundir, reflect(rd, n)), 0.0, 1.0), 10.0)); \n\n           vec3 lin = 4.5 * sun * dif * shadow; \n           lin += 0.8 * bac * sun; \n           lin += 0.6 * sky * skycolor*shadow; \n           lin += 3.0 * spe * shadow; \n\n\t\t   res.y = pow(clamp(res.y, 0.0, 1.0), 0.55);\n\t\t   vec3 tc0 = 0.5 + 0.5 * sin(3.0 + 4.2 * res.y + vec3(0.0, 0.5, 1.0));\n           col = lin *vec3(0.9, 0.8, 0.6) *  0.2 * tc0;\n \t\t   col=mix(col,bg, 1.0-exp(-0.001*res.x*res.x)); \n    } \n\n    // post\n    col=pow(clamp(col,0.0,1.0),vec3(0.45)); \n    col=col*0.6+0.4*col*col*(3.0-2.0*col);  // contrast\n    col=mix(col, vec3(dot(col, vec3(0.33))), -0.5);  // satuation\n    col*=0.5+0.5*pow(16.0*q.x*q.y*(1.0-q.x)*(1.0-q.y),0.7);  // vigneting\n \tfragColor = vec4(col.xyz, smoothstep(0.55, .76, 1.-res.x/5.)); \n }",
+      "name": "Image",
+      "description": "",
+      "type": "image"
+    }
+  ]
+}

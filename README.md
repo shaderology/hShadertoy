@@ -2,7 +2,7 @@
 
 **Experimental Shadertoy.com importer for Houdini 21 Copernicus**
 
-https://youtu.be/ULpn8tGFsRI
+https://youtu.be/3tn9HGVOtD8
 
 ## What is this?
 
@@ -10,23 +10,31 @@ https://youtu.be/ULpn8tGFsRI
 > Houdini COPs, do you think it's possible?"
 
 It is. hShadertoy fetches a shader straight from Shadertoy.com and rebuilds it
-as a native Copernicus network — including multi-pass buffers, cubemaps and
-textures. The GLSL is translated to OpenCL on the fly. Madness! Never been
-done!
+as a native Copernicus network - including multi-pass buffers, cubemaps and
+textures. The GLSL is translated to OpenCL on the fly. Madness!
 
 ## How it works
 
-1. **Editor** — a Shadertoy mini-IDE on the hShadertoy shelf. Browse, fetch by
+1. **Editor** - a Shadertoy mini-IDE on the hShadertoy shelf. Browse, fetch by
    URL/ID, import (Shadertoy API JSON in/out).
-2. **Builder** — creates the hShadertoy HDA and wires every renderpass up.
-3. **Transpiler** — translates each GLSL pass to OpenCL for Copernicus.
+2. **Builder** - creates the hShadertoy HDA and wires every renderpass up.
+3. **Transpiler** - translates each GLSL pass to OpenCL for Copernicus.
+
+![The hShadertoy Editor](docs/editor.png)
+
+The generated HDA exposes every Shadertoy renderpass as parameters, backed by a
+Copernicus subnet:
+
+![hShadertoy HDA parameters](docs/hda.png)
+
+![hShadertoy HDA subnet](docs/hda_subnet.png)
 
 Shadertoy → Houdini mapping:
 
 - GLSL fragment shaders → OpenCL COP nodes
 - Buffer passes → Block Begin/End
 - Cubemaps packed/unpacked to 2D image maps (volumes on the todo list)
-- Shadertoy textures ship with the HDA — no downloads needed
+- Shadertoy textures ship with the HDA - no downloads needed
 - iMouse → viewer state / Mouse CHOP (todo) · Webcam → Live Video COP (todo) ·
   Audio → Audio In CHOP (todo)
 
@@ -51,7 +59,7 @@ Shadertoy → Houdini mapping:
 3. **Copy** `houdini/packages/hShadertoy.json` to your packages directory,
    e.g. `$HOUDINI_USER_PREF_DIR/packages`
 
-4. **Edit it** — fill in the first three values and set `"enable": true`:
+4. **Edit it** - fill in the first three values and set `"enable": true`:
 
    ```
    { "HSHADERTOY_ROOT": "C:/dev/hShadertoy" },
@@ -61,26 +69,25 @@ Shadertoy → Houdini mapping:
    "enable": true
    ```
 
-5. Start Houdini → **hShadertoy shelf → Editor** → paste a shader URL → import.
-   That's it.
+5. Start Houdini → **hShadertoy shelf → Editor** → paste a shader URL → import → build.
+   That's it
 
 ## Limitations
 
 - **Not every shader transpiles (yet).** Typical image shaders work well;
-  heavy preprocessor tricks are the main holdouts. On a random sample of 999
-  Shadertoy shaders, ~56% currently compile end-to-end — and that number grows
+  heavy preprocessor tricks are the main holdouts. On a sample of 999
+  Shadertoy shaders, ~86% currently compile end-to-end - and that number grows
   weekly with the ongoing fix campaign.
 - `dFdx()`, `dFdy()`, `fwidth()` are passthrough functions (no derivatives in
-  OpenCL) — shaders relying on them will look different.
+  OpenCL) - shaders relying on them will look different.
 - No mipmaps in COPs: `texture()` bias/LOD arguments are accepted but ignored.
 - Sound passes, webcam, video and keyboard input aren't wired up yet.
-- `iTime` & friends used in *global initializers* evaluate once (constant).
 - Only shaders published as **Public + API** can be fetched.
 
 ## Development
 
 New contributors: start with [.claude/skills/onboarding/SKILL.md](.claude/skills/onboarding/SKILL.md)
-— it maps the repo, the rules and the workflows. The forward plan lives in
+- it maps the repo, the rules and the workflows. The forward plan lives in
 [docs/handover/ROADMAP.md](docs/handover/ROADMAP.md).
 
 ### Pipeline
@@ -98,7 +105,7 @@ New contributors: start with [.claude/skills/onboarding/SKILL.md](.claude/skills
 ### Testing
 ```bash
 pip install -r requirements.txt              # dev deps (pytest, pyopencl, ...)
-python -m pytest tests/unit/ -q              # unit suite — the regression gate
+python -m pytest tests/unit/ -q              # unit suite - the regression gate
 python tests/transpile.py <file>.glsl        # transpile one shader -> .header.cl/.kernel.cl
 python tests/compilecl.py --header <file>.header.cl <file>.kernel.cl   # compile it
 ```

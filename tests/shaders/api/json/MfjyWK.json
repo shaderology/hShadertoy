@@ -1,0 +1,35 @@
+{
+  "ver": "0.1",
+  "info": {
+    "id": "MfjyWK",
+    "date": "1723022633",
+    "viewed": 22918,
+    "name": "Starry planes",
+    "username": "mrange",
+    "description": "CC0: Starry planes\n  Revisited ye olde \"plane-marcher\".\n  A simple result that I think turned out pretty nice\n",
+    "likes": 302,
+    "published": 3,
+    "flags": 0,
+    "usePreview": 0,
+    "tags": [
+      "stars",
+      "planes"
+    ],
+    "hasliked": 0
+  },
+  "renderpass": [
+    {
+      "inputs": [],
+      "outputs": [
+        {
+          "id": 37,
+          "channel": 0
+        }
+      ],
+      "code": "// CC0: Starry planes\n//  Revisited ye olde \"plane-marcher\".\n//  A simple result that I think turned out pretty nice\n\n#define TIME        iTime\n#define RESOLUTION  iResolution\n\n#define ROT(a)      mat2(cos(a), sin(a), -sin(a), cos(a))\n\nconst float\n  pi        = acos(-1.)\n, tau       = 2.*pi\n, planeDist = .5\n, furthest  = 16.\n, fadeFrom  = 8.\n;\n\nconst vec2 \n  pathA = vec2(.31, .41)\n, pathB = vec2(1.0,sqrt(0.5))\n;\n\nconst vec4 \n  U = vec4(0, 1, 2, 3)\n  ;\n  \n// License: Unknown, author: Matt Taylor (https://github.com/64), found: https://64.github.io/tonemapping/\nvec3 aces_approx(vec3 v) {\n  v = max(v, 0.0);\n  v *= 0.6;\n  float a = 2.51;\n  float b = 0.03;\n  float c = 2.43;\n  float d = 0.59;\n  float e = 0.14;\n  return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0, 1.0);\n}\n\nvec3 offset(float z) {\n  return vec3(pathB*sin(pathA*z), z);\n}\n\nvec3 doffset(float z) {\n  return vec3(pathA*pathB*cos(pathA*z), 1.0);\n}\n\nvec3 ddoffset(float z) {\n  return vec3(-pathA*pathA*pathB*sin(pathA*z), 0.0);\n}\n\nvec4 alphaBlend(vec4 back, vec4 front) {\n  // Based on: https://en.wikipedia.org/wiki/Alpha_compositing\n  float w = front.w + back.w*(1.0-front.w);\n  vec3 xyz = (front.xyz*front.w + back.xyz*back.w*(1.0-front.w))/w;\n  return w > 0.0 ? vec4(xyz, w) : vec4(0.0);\n}\n\n// License: MIT, author: Inigo Quilez, found: https://www.iquilezles.org/www/articles/smin/smin.htm\nfloat pmin(float a, float b, float k) {\n  float h = clamp(0.5+0.5*(b-a)/k, 0.0, 1.0);\n  return mix(b, a, h) - k*h*(1.0-h);\n}\n\nfloat pmax(float a, float b, float k) {\n  return -pmin(-a, -b, k);\n}\n\nfloat pabs(float a, float k) {\n  return -pmin(a, -a, k);\n}\n\n// License: MIT, author: Inigo Quilez, found: https://iquilezles.org/articles/distfunctions2d/\n//   Slightly tweaked to round the inner corners\nfloat star5(vec2 p, float r, float rf, float sm) {\n  p = -p;\n  const vec2 k1 = vec2(0.809016994375, -0.587785252292);\n  const vec2 k2 = vec2(-k1.x,k1.y);\n  p.x = abs(p.x);\n  p -= 2.0*max(dot(k1,p),0.0)*k1;\n  p -= 2.0*max(dot(k2,p),0.0)*k2;\n  p.x = pabs(p.x, sm);\n  p.y -= r;\n  vec2 ba = rf*vec2(-k1.y,k1.x) - vec2(0,1);\n  float h = clamp( dot(p,ba)/dot(ba,ba), 0.0, r );\n  return length(p-ba*h) * sign(p.y*ba.x-p.x*ba.y);\n}\n\nvec3 palette(float n) {\n  return 0.5+0.5*sin(vec3(0.,1.,2.)+n);\n}\n\nvec4 plane(vec3 ro, vec3 rd, vec3 pp, vec3 npp, float pd, vec3 cp, vec3 off, float n) {\n\n  float aa = 3.*pd*distance(pp.xy, npp.xy);\n  vec4 col = vec4(0.);\n  vec2 p2 = pp.xy;\n  p2 -= offset(pp.z).xy;\n  vec2 doff   = ddoffset(pp.z).xz;\n  vec2 ddoff  = doffset(pp.z).xz;\n  float dd = dot(doff, ddoff);\n  p2 *= ROT(dd*pi*5.);\n\n  float d0 = star5(p2, 0.45, 1.6,0.2)-0.02;\n  float d1 = d0-0.01;\n  float d2 = length(p2);\n  const float colp = pi*100.;\n  float colaa = aa*200.;\n  \n  col.xyz = palette(0.5*n+2.*d2)*mix(0.5/(d2*d2), 1., smoothstep(-0.5+colaa, 0.5+colaa, sin(d2*colp)))/max(3.*d2*d2, 1E-1);\n  col.xyz = mix(col.xyz, vec3(2.), smoothstep(aa, -aa, d1)); \n  col.w = smoothstep(aa, -aa, -d0);\n  return col;\n\n}\n\nvec3 color(vec3 ww, vec3 uu, vec3 vv, vec3 ro, vec2 p) {\n  float lp = length(p);\n  vec2 np = p + 1./RESOLUTION.xy;\n  float rdd = 2.0-0.25;\n  \n  vec3 rd = normalize(p.x*uu + p.y*vv + rdd*ww);\n  vec3 nrd = normalize(np.x*uu + np.y*vv + rdd*ww);\n\n  float nz = floor(ro.z / planeDist);\n\n  vec4 acol = vec4(0.0);\n\n  vec3 aro = ro;\n  float apd = 0.0;\n\n  for (float i = 1.; i <= furthest; ++i) {\n    if ( acol.w > 0.95) {\n      // Debug col to see when exiting\n      // acol.xyz = palette(i); \n      break;\n    }\n    float pz = planeDist*nz + planeDist*i;\n\n    float lpd = (pz - aro.z)/rd.z;\n    float npd = (pz - aro.z)/nrd.z;\n    float cpd = (pz - aro.z)/ww.z;\n\n    {\n      vec3 pp = aro + rd*lpd;\n      vec3 npp= aro + nrd*npd;\n      vec3 cp = aro+ww*cpd;\n\n      apd += lpd;\n\n      vec3 off = offset(pp.z);\n\n      float dz = pp.z-ro.z;\n      float fadeIn = smoothstep(planeDist*furthest, planeDist*fadeFrom, dz);\n      float fadeOut = smoothstep(0., planeDist*.1, dz);\n      float fadeOutRI = smoothstep(0., planeDist*1.0, dz);\n\n      float ri = mix(1.0, 0.9, fadeOutRI*fadeIn);\n\n      vec4 pcol = plane(ro, rd, pp, npp, apd, cp, off, nz+i);\n\n      pcol.w *= fadeOut*fadeIn;\n      acol = alphaBlend(pcol, acol);\n      aro = pp;\n    }\n    \n  }\n\n  return acol.xyz*acol.w;\n\n}\n\nvoid mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n  vec2 r = RESOLUTION.xy, q = fragCoord/r, pp = -1.0+2.0*q, p = pp;\n  p.x *= r.x/r.y;\n\n  float tm  = planeDist*TIME;\n\n  vec3 ro   = offset(tm);\n  vec3 dro  = doffset(tm);\n  vec3 ddro = ddoffset(tm);\n\n  vec3 ww = normalize(dro);\n  vec3 uu = normalize(cross(U.xyx+ddro, ww));\n  vec3 vv = cross(ww, uu);\n  \n  vec3 col = color(ww, uu, vv, ro, p);\n  col = aces_approx(col);\n  col = sqrt(col);\n  fragColor = vec4(col, 1);\n}\n\n\n",
+      "name": "Image",
+      "description": "",
+      "type": "image"
+    }
+  ]
+}

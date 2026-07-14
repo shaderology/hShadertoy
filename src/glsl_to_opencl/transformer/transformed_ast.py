@@ -171,6 +171,24 @@ class ParenthesizedExpression(TransformedNode):
 
 
 @dataclass(frozen=True)
+class CommaExpression(TransformedNode):
+    """
+    Comma (sequence) operator: `a, b`.
+
+    GLSL and C share the sequence operator — each operand is evaluated and the
+    value of the whole expression is the value of the last operand. tree-sitter
+    nests it right-associatively (`a, b, c` -> CommaExpression(a, (b, c))), so
+    a single left/right pair emits correctly for any arity.
+
+    Examples:
+        (1.25, 1., 1.2)          -> yields 1.2
+        (min(...), min(...))     -> yields the second min
+    """
+    left: TransformedNode = None
+    right: TransformedNode = None
+
+
+@dataclass(frozen=True)
 class CallExpression(TransformedNode):
     """
     Function call expression.
@@ -489,6 +507,9 @@ class FunctionDefinition(TransformedNode):
     parameters: List[Parameter] = None
     body: CompoundStatement = None
     overloadable: bool = False  # Emit __attribute__((overloadable)) before signature
+    is_prototype: bool = False  # Forward declaration (category S): no body,
+    # emitted as `signature;`. Must carry the same overloadable marking as
+    # the definition or OpenCL rejects the prototype/definition pair.
 
 
 # ============================================================================
@@ -563,6 +584,18 @@ class PreprocessorDirective(TransformedNode):
         #endif
     """
     text: str = None  # Raw directive text (already transformed)
+
+
+@dataclass(frozen=True)
+class Comment(TransformedNode):
+    """
+    Verbatim source comment (top-level only).
+
+    Shadertoy code is CC-licensed; attribution/license comment blocks at file
+    scope are preserved through the IR so they survive into the emitted
+    header. Text includes the comment delimiters (// or /* */).
+    """
+    text: str = None
 
 
 @dataclass(frozen=True)

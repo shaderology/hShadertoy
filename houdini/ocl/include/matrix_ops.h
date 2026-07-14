@@ -43,7 +43,13 @@ inline matrix4x4 GLSL_matrix4x4_diagonal(float s) {
  * Column-major order: GLSL mat3(c0r0, c0r1, c0r2, c1r0, ...)
  * ============================================================ */
 
-inline matrix2x2 GLSL_mat2(float m00, float m10,
+/* The bare GLSL_matN name is overloadable so the textual macro-body path
+ * (preprocessor_transformer.py, category J) can map every GLSL matrix ctor
+ * shape — full scalars, single scalar (diagonal), single vec4 — to the same
+ * name and let clang overload resolution pick. The AST path only ever emits
+ * the full-scalar form; single-arg shapes it names explicitly
+ * (GLSL_matN_from_*, GLSL_matrixNxN_diagonal). */
+inline __attribute__((overloadable)) matrix2x2 GLSL_mat2(float m00, float m10,
                             float m01, float m11) {
     matrix2x2 m;
     m.cols[0] = (float2)(m00, m10);
@@ -51,7 +57,7 @@ inline matrix2x2 GLSL_mat2(float m00, float m10,
     return m;
 }
 
-inline matrix3x3 GLSL_mat3(float m00, float m10, float m20,
+inline __attribute__((overloadable)) matrix3x3 GLSL_mat3(float m00, float m10, float m20,
                             float m01, float m11, float m21,
                             float m02, float m12, float m22) {
     matrix3x3 m;
@@ -61,7 +67,7 @@ inline matrix3x3 GLSL_mat3(float m00, float m10, float m20,
     return m;
 }
 
-inline matrix4x4 GLSL_mat4(float m00, float m10, float m20, float m30,
+inline __attribute__((overloadable)) matrix4x4 GLSL_mat4(float m00, float m10, float m20, float m30,
                             float m01, float m11, float m21, float m31,
                             float m02, float m12, float m22, float m32,
                             float m03, float m13, float m23, float m33) {
@@ -70,6 +76,27 @@ inline matrix4x4 GLSL_mat4(float m00, float m10, float m20, float m30,
     m.cols[1] = (float4)(m01, m11, m21, m31);
     m.cols[2] = (float4)(m02, m12, m22, m32);
     m.cols[3] = (float4)(m03, m13, m23, m33);
+    return m;
+}
+
+/* Single-argument matrix-ctor overloads for the textual macro path.
+ * matN(s): scalar on the diagonal (GLSL semantics).
+ * mat2(v4): components fill the matrix column-major (animated-rotation idiom
+ *   mat2(cos(t + vec4(0,11,33,0)))). Bodies are inlined (not delegated) to
+ *   avoid a forward reference to GLSL_mat2_from_vec4, defined further down. */
+inline __attribute__((overloadable)) matrix2x2 GLSL_mat2(float s) {
+    return GLSL_matrix2x2_diagonal(s);
+}
+inline __attribute__((overloadable)) matrix3x3 GLSL_mat3(float s) {
+    return GLSL_matrix3x3_diagonal(s);
+}
+inline __attribute__((overloadable)) matrix4x4 GLSL_mat4(float s) {
+    return GLSL_matrix4x4_diagonal(s);
+}
+inline __attribute__((overloadable)) matrix2x2 GLSL_mat2(float4 v) {
+    matrix2x2 m;
+    m.cols[0] = v.xy;
+    m.cols[1] = v.zw;
     return m;
 }
 
@@ -119,6 +146,48 @@ inline matrix4x4 GLSL_mat4_from_mat3(matrix3x3 m) {
     result.cols[1] = (float4)(m.cols[1], 0.0f);
     result.cols[2] = (float4)(m.cols[2], 0.0f);
     result.cols[3] = (float4)(0.0f, 0.0f, 0.0f, 1.0f);
+    return result;
+}
+
+/* GLSL matN(matM): upper-left submatrix is copied, any remainder is
+ * filled from the identity matrix. */
+inline matrix2x2 GLSL_mat2_from_mat3(matrix3x3 m) {
+    matrix2x2 result;
+    result.cols[0] = m.cols[0].xy;
+    result.cols[1] = m.cols[1].xy;
+    return result;
+}
+
+inline matrix2x2 GLSL_mat2_from_mat4(matrix4x4 m) {
+    matrix2x2 result;
+    result.cols[0] = m.cols[0].xy;
+    result.cols[1] = m.cols[1].xy;
+    return result;
+}
+
+inline matrix3x3 GLSL_mat3_from_mat2(matrix2x2 m) {
+    matrix3x3 result;
+    result.cols[0] = (float3)(m.cols[0], 0.0f);
+    result.cols[1] = (float3)(m.cols[1], 0.0f);
+    result.cols[2] = (float3)(0.0f, 0.0f, 1.0f);
+    return result;
+}
+
+inline matrix4x4 GLSL_mat4_from_mat2(matrix2x2 m) {
+    matrix4x4 result;
+    result.cols[0] = (float4)(m.cols[0], 0.0f, 0.0f);
+    result.cols[1] = (float4)(m.cols[1], 0.0f, 0.0f);
+    result.cols[2] = (float4)(0.0f, 0.0f, 1.0f, 0.0f);
+    result.cols[3] = (float4)(0.0f, 0.0f, 0.0f, 1.0f);
+    return result;
+}
+
+/* GLSL mat2(vec4): the four components fill the matrix column-major
+ * (the animated-rotation idiom mat2(cos(t + vec4(0,11,33,0)))). */
+inline matrix2x2 GLSL_mat2_from_vec4(float4 v) {
+    matrix2x2 result;
+    result.cols[0] = v.xy;
+    result.cols[1] = v.zw;
     return result;
 }
 
@@ -199,9 +268,12 @@ inline matrix4x4 GLSL_mul_mat4_mat4(matrix4x4 A, matrix4x4 B) {
 
 /* ============================================================
  * TRANSPOSE
+ * The bare name is an overloadable dispatcher across all sizes (the
+ * transpiler emits it when the argument's type cannot be inferred); the
+ * suffixed _mat3/_mat4 names are the direct typed spellings.
  * ============================================================ */
 
-inline matrix2x2 GLSL_transpose(matrix2x2 M) {
+inline __attribute__((overloadable)) matrix2x2 GLSL_transpose(matrix2x2 M) {
     matrix2x2 result;
     result.cols[0] = (float2)(M.cols[0].x, M.cols[1].x);
     result.cols[1] = (float2)(M.cols[0].y, M.cols[1].y);
@@ -225,11 +297,14 @@ inline matrix4x4 GLSL_transpose_mat4(matrix4x4 M) {
     return result;
 }
 
+inline __attribute__((overloadable)) matrix3x3 GLSL_transpose(matrix3x3 M) { return GLSL_transpose_mat3(M); }
+inline __attribute__((overloadable)) matrix4x4 GLSL_transpose(matrix4x4 M) { return GLSL_transpose_mat4(M); }
+
 /* ============================================================
  * DETERMINANT
  * ============================================================ */
 
-inline float GLSL_determinant(matrix2x2 M) {
+inline __attribute__((overloadable)) float GLSL_determinant(matrix2x2 M) {
     return M.cols[0].x * M.cols[1].y - M.cols[0].y * M.cols[1].x;
 }
 
@@ -266,11 +341,14 @@ inline float GLSL_determinant_mat4(matrix4x4 M) {
            d * (e * jo_kn - f * io_km + g * in_jm);
 }
 
+inline __attribute__((overloadable)) float GLSL_determinant(matrix3x3 M) { return GLSL_determinant_mat3(M); }
+inline __attribute__((overloadable)) float GLSL_determinant(matrix4x4 M) { return GLSL_determinant_mat4(M); }
+
 /* ============================================================
  * INVERSE
  * ============================================================ */
 
-inline matrix2x2 GLSL_inverse(matrix2x2 M) {
+inline __attribute__((overloadable)) matrix2x2 GLSL_inverse(matrix2x2 M) {
     float det = GLSL_determinant(M);
     float invDet = 1.0f / det;
 
@@ -369,11 +447,14 @@ inline matrix4x4 GLSL_inverse_mat4(matrix4x4 M) {
     return result;
 }
 
+inline __attribute__((overloadable)) matrix3x3 GLSL_inverse(matrix3x3 M) { return GLSL_inverse_mat3(M); }
+inline __attribute__((overloadable)) matrix4x4 GLSL_inverse(matrix4x4 M) { return GLSL_inverse_mat4(M); }
+
 /* ============================================================
  * COMPONENT-WISE MULTIPLICATION
  * ============================================================ */
 
-inline matrix2x2 GLSL_matrixCompMult(matrix2x2 A, matrix2x2 B) {
+inline __attribute__((overloadable)) matrix2x2 GLSL_matrixCompMult(matrix2x2 A, matrix2x2 B) {
     matrix2x2 result;
     result.cols[0] = A.cols[0] * B.cols[0];
     result.cols[1] = A.cols[1] * B.cols[1];
@@ -396,5 +477,167 @@ inline matrix4x4 GLSL_matrixCompMult_mat4(matrix4x4 A, matrix4x4 B) {
     result.cols[3] = A.cols[3] * B.cols[3];
     return result;
 }
+
+/* ============================================================
+ * COMPONENTWISE MATRIX ARITHMETIC (category H)
+ * GLSL allows scalar-broadcast and elementwise ops on matrices:
+ *   M * s, s * M, M / s, M + s, M - s, s - M  (scalar broadcast to EVERY
+ *   element — GLSL M + s is NOT diagonal-only) and M + M, M - M, M / M
+ *   (elementwise; M * M is linear-algebra multiply, see GLSL_mul_matN_matN).
+ * OpenCL's matrix types are structs, so native operators are rejected.
+ * ============================================================ */
+
+/* --- mat2 --- */
+inline matrix2x2 GLSL_mat2_muls(matrix2x2 M, float s) {
+    matrix2x2 r; r.cols[0] = M.cols[0] * s; r.cols[1] = M.cols[1] * s; return r;
+}
+inline matrix2x2 GLSL_mat2_divs(matrix2x2 M, float s) {
+    matrix2x2 r; r.cols[0] = M.cols[0] / s; r.cols[1] = M.cols[1] / s; return r;
+}
+inline matrix2x2 GLSL_mat2_adds(matrix2x2 M, float s) {
+    matrix2x2 r; r.cols[0] = M.cols[0] + s; r.cols[1] = M.cols[1] + s; return r;
+}
+inline matrix2x2 GLSL_mat2_subs(matrix2x2 M, float s) {
+    matrix2x2 r; r.cols[0] = M.cols[0] - s; r.cols[1] = M.cols[1] - s; return r;
+}
+inline matrix2x2 GLSL_mat2_rsub(float s, matrix2x2 M) {
+    matrix2x2 r; r.cols[0] = s - M.cols[0]; r.cols[1] = s - M.cols[1]; return r;
+}
+inline matrix2x2 GLSL_mat2_rdiv(float s, matrix2x2 M) {
+    matrix2x2 r; r.cols[0] = s / M.cols[0]; r.cols[1] = s / M.cols[1]; return r;
+}
+inline matrix2x2 GLSL_mat2_add(matrix2x2 A, matrix2x2 B) {
+    matrix2x2 r; r.cols[0] = A.cols[0] + B.cols[0]; r.cols[1] = A.cols[1] + B.cols[1]; return r;
+}
+inline matrix2x2 GLSL_mat2_sub(matrix2x2 A, matrix2x2 B) {
+    matrix2x2 r; r.cols[0] = A.cols[0] - B.cols[0]; r.cols[1] = A.cols[1] - B.cols[1]; return r;
+}
+inline matrix2x2 GLSL_mat2_div(matrix2x2 A, matrix2x2 B) {
+    matrix2x2 r; r.cols[0] = A.cols[0] / B.cols[0]; r.cols[1] = A.cols[1] / B.cols[1]; return r;
+}
+
+/* --- mat3 --- */
+inline matrix3x3 GLSL_mat3_muls(matrix3x3 M, float s) {
+    matrix3x3 r; r.cols[0] = M.cols[0] * s; r.cols[1] = M.cols[1] * s; r.cols[2] = M.cols[2] * s; return r;
+}
+inline matrix3x3 GLSL_mat3_divs(matrix3x3 M, float s) {
+    matrix3x3 r; r.cols[0] = M.cols[0] / s; r.cols[1] = M.cols[1] / s; r.cols[2] = M.cols[2] / s; return r;
+}
+inline matrix3x3 GLSL_mat3_adds(matrix3x3 M, float s) {
+    matrix3x3 r; r.cols[0] = M.cols[0] + s; r.cols[1] = M.cols[1] + s; r.cols[2] = M.cols[2] + s; return r;
+}
+inline matrix3x3 GLSL_mat3_subs(matrix3x3 M, float s) {
+    matrix3x3 r; r.cols[0] = M.cols[0] - s; r.cols[1] = M.cols[1] - s; r.cols[2] = M.cols[2] - s; return r;
+}
+inline matrix3x3 GLSL_mat3_rsub(float s, matrix3x3 M) {
+    matrix3x3 r; r.cols[0] = s - M.cols[0]; r.cols[1] = s - M.cols[1]; r.cols[2] = s - M.cols[2]; return r;
+}
+inline matrix3x3 GLSL_mat3_rdiv(float s, matrix3x3 M) {
+    matrix3x3 r; r.cols[0] = s / M.cols[0]; r.cols[1] = s / M.cols[1]; r.cols[2] = s / M.cols[2]; return r;
+}
+inline matrix3x3 GLSL_mat3_add(matrix3x3 A, matrix3x3 B) {
+    matrix3x3 r; r.cols[0] = A.cols[0] + B.cols[0]; r.cols[1] = A.cols[1] + B.cols[1]; r.cols[2] = A.cols[2] + B.cols[2]; return r;
+}
+inline matrix3x3 GLSL_mat3_sub(matrix3x3 A, matrix3x3 B) {
+    matrix3x3 r; r.cols[0] = A.cols[0] - B.cols[0]; r.cols[1] = A.cols[1] - B.cols[1]; r.cols[2] = A.cols[2] - B.cols[2]; return r;
+}
+inline matrix3x3 GLSL_mat3_div(matrix3x3 A, matrix3x3 B) {
+    matrix3x3 r; r.cols[0] = A.cols[0] / B.cols[0]; r.cols[1] = A.cols[1] / B.cols[1]; r.cols[2] = A.cols[2] / B.cols[2]; return r;
+}
+
+/* --- mat4 --- */
+inline matrix4x4 GLSL_mat4_muls(matrix4x4 M, float s) {
+    matrix4x4 r; r.cols[0] = M.cols[0] * s; r.cols[1] = M.cols[1] * s; r.cols[2] = M.cols[2] * s; r.cols[3] = M.cols[3] * s; return r;
+}
+inline matrix4x4 GLSL_mat4_divs(matrix4x4 M, float s) {
+    matrix4x4 r; r.cols[0] = M.cols[0] / s; r.cols[1] = M.cols[1] / s; r.cols[2] = M.cols[2] / s; r.cols[3] = M.cols[3] / s; return r;
+}
+inline matrix4x4 GLSL_mat4_adds(matrix4x4 M, float s) {
+    matrix4x4 r; r.cols[0] = M.cols[0] + s; r.cols[1] = M.cols[1] + s; r.cols[2] = M.cols[2] + s; r.cols[3] = M.cols[3] + s; return r;
+}
+inline matrix4x4 GLSL_mat4_subs(matrix4x4 M, float s) {
+    matrix4x4 r; r.cols[0] = M.cols[0] - s; r.cols[1] = M.cols[1] - s; r.cols[2] = M.cols[2] - s; r.cols[3] = M.cols[3] - s; return r;
+}
+inline matrix4x4 GLSL_mat4_rsub(float s, matrix4x4 M) {
+    matrix4x4 r; r.cols[0] = s - M.cols[0]; r.cols[1] = s - M.cols[1]; r.cols[2] = s - M.cols[2]; r.cols[3] = s - M.cols[3]; return r;
+}
+inline matrix4x4 GLSL_mat4_rdiv(float s, matrix4x4 M) {
+    matrix4x4 r; r.cols[0] = s / M.cols[0]; r.cols[1] = s / M.cols[1]; r.cols[2] = s / M.cols[2]; r.cols[3] = s / M.cols[3]; return r;
+}
+inline matrix4x4 GLSL_mat4_add(matrix4x4 A, matrix4x4 B) {
+    matrix4x4 r; r.cols[0] = A.cols[0] + B.cols[0]; r.cols[1] = A.cols[1] + B.cols[1]; r.cols[2] = A.cols[2] + B.cols[2]; r.cols[3] = A.cols[3] + B.cols[3]; return r;
+}
+inline matrix4x4 GLSL_mat4_sub(matrix4x4 A, matrix4x4 B) {
+    matrix4x4 r; r.cols[0] = A.cols[0] - B.cols[0]; r.cols[1] = A.cols[1] - B.cols[1]; r.cols[2] = A.cols[2] - B.cols[2]; r.cols[3] = A.cols[3] - B.cols[3]; return r;
+}
+inline matrix4x4 GLSL_mat4_div(matrix4x4 A, matrix4x4 B) {
+    matrix4x4 r; r.cols[0] = A.cols[0] / B.cols[0]; r.cols[1] = A.cols[1] / B.cols[1]; r.cols[2] = A.cols[2] / B.cols[2]; r.cols[3] = A.cols[3] / B.cols[3]; return r;
+}
+
+inline __attribute__((overloadable)) matrix3x3 GLSL_matrixCompMult(matrix3x3 A, matrix3x3 B) { return GLSL_matrixCompMult_mat3(A, B); }
+inline __attribute__((overloadable)) matrix4x4 GLSL_matrixCompMult(matrix4x4 A, matrix4x4 B) { return GLSL_matrixCompMult_mat4(A, B); }
+
+/* ============================================================
+ * OUTER PRODUCT (GLSL outerProduct builtin)
+ * outerProduct(c, r) = c * r^T: column j of the result is c * r[j].
+ * ============================================================ */
+
+inline __attribute__((overloadable)) matrix2x2 GLSL_outerProduct(float2 c, float2 r) {
+    matrix2x2 m; m.cols[0] = c * r.x; m.cols[1] = c * r.y; return m;
+}
+inline __attribute__((overloadable)) matrix3x3 GLSL_outerProduct(float3 c, float3 r) {
+    matrix3x3 m; m.cols[0] = c * r.x; m.cols[1] = c * r.y; m.cols[2] = c * r.z; return m;
+}
+inline __attribute__((overloadable)) matrix4x4 GLSL_outerProduct(float4 c, float4 r) {
+    matrix4x4 m; m.cols[0] = c * r.x; m.cols[1] = c * r.y; m.cols[2] = c * r.z; m.cols[3] = c * r.w; return m;
+}
+
+/* ============================================================
+ * AGGREGATE MATRIX EQUALITY (GLSL `M1 == M2` / `M1 != M2`)
+ * GLSL == on matrices is a single bool ("all components equal"); OpenCL
+ * struct types reject the operator. The transpiler emits
+ * GLSL_mat_eq(A, B) for == and !GLSL_mat_eq(A, B) for !=.
+ * ============================================================ */
+
+inline __attribute__((overloadable)) int GLSL_mat_eq(matrix2x2 A, matrix2x2 B) {
+    return all(A.cols[0] == B.cols[0]) && all(A.cols[1] == B.cols[1]);
+}
+inline __attribute__((overloadable)) int GLSL_mat_eq(matrix3x3 A, matrix3x3 B) {
+    return all(A.cols[0] == B.cols[0]) && all(A.cols[1] == B.cols[1]) && all(A.cols[2] == B.cols[2]);
+}
+inline __attribute__((overloadable)) int GLSL_mat_eq(matrix4x4 A, matrix4x4 B) {
+    return all(A.cols[0] == B.cols[0]) && all(A.cols[1] == B.cols[1]) && all(A.cols[2] == B.cols[2]) && all(A.cols[3] == B.cols[3]);
+}
+
+/* ============================================================
+ * GENERIC GLSL_mul DISPATCHER (category E)
+ * The transpiler emits GLSL_mul(a, b) for a GLSL `*` (or `*=`) where one
+ * operand is a proven matrix but the other is statically untypeable (e.g. a
+ * #define'd identifier). GLSL only permits scalar, matching-vector, or
+ * matrix partners, so overload resolution picks the right lowering here.
+ * ============================================================ */
+
+#define __MAT_OVER __attribute__((overloadable))
+
+/* matN * vecN / vecN * matN / matN * matN — linear algebra */
+inline __MAT_OVER float2    GLSL_mul(matrix2x2 M, float2 v)    { return GLSL_mul_mat2_vec2(M, v); }
+inline __MAT_OVER float3    GLSL_mul(matrix3x3 M, float3 v)    { return GLSL_mul_mat3_vec3(M, v); }
+inline __MAT_OVER float4    GLSL_mul(matrix4x4 M, float4 v)    { return GLSL_mul_mat4_vec4(M, v); }
+inline __MAT_OVER float2    GLSL_mul(float2 v, matrix2x2 M)    { return GLSL_mul_vec2_mat2(v, M); }
+inline __MAT_OVER float3    GLSL_mul(float3 v, matrix3x3 M)    { return GLSL_mul_vec3_mat3(v, M); }
+inline __MAT_OVER float4    GLSL_mul(float4 v, matrix4x4 M)    { return GLSL_mul_vec4_mat4(v, M); }
+inline __MAT_OVER matrix2x2 GLSL_mul(matrix2x2 A, matrix2x2 B) { return GLSL_mul_mat2_mat2(A, B); }
+inline __MAT_OVER matrix3x3 GLSL_mul(matrix3x3 A, matrix3x3 B) { return GLSL_mul_mat3_mat3(A, B); }
+inline __MAT_OVER matrix4x4 GLSL_mul(matrix4x4 A, matrix4x4 B) { return GLSL_mul_mat4_mat4(A, B); }
+
+/* matN * scalar / scalar * matN — componentwise broadcast */
+inline __MAT_OVER matrix2x2 GLSL_mul(matrix2x2 M, float s) { return GLSL_mat2_muls(M, s); }
+inline __MAT_OVER matrix3x3 GLSL_mul(matrix3x3 M, float s) { return GLSL_mat3_muls(M, s); }
+inline __MAT_OVER matrix4x4 GLSL_mul(matrix4x4 M, float s) { return GLSL_mat4_muls(M, s); }
+inline __MAT_OVER matrix2x2 GLSL_mul(float s, matrix2x2 M) { return GLSL_mat2_muls(M, s); }
+inline __MAT_OVER matrix3x3 GLSL_mul(float s, matrix3x3 M) { return GLSL_mat3_muls(M, s); }
+inline __MAT_OVER matrix4x4 GLSL_mul(float s, matrix4x4 M) { return GLSL_mat4_muls(M, s); }
+
+#undef __MAT_OVER
 
 #endif /* __MATRIX_OPS_H__ */

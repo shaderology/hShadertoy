@@ -208,7 +208,12 @@ class OpenCLEmitter:
 
         # Prefix operators: ++x, --x, -x, +x, !x, ~x
         # (Postfix would be: x++, x--, but transformer marks these as prefix)
-        return f"{node.operator}{operand}"
+        # A '+'/'-' operator over an operand whose emitted form starts with
+        # '+'/'-' (e.g. -(-1) folded to a negative literal) must keep a space,
+        # else the two glue into '--'/'++' — which C lexes as inc/decrement and
+        # rejects with "expression is not assignable".
+        sep = ' ' if (node.operator[-1] in '+-' and operand[:1] in '+-') else ''
+        return f"{node.operator}{sep}{operand}"
 
     def emit_ParenthesizedExpression(self, node: IR.ParenthesizedExpression) -> str:
         """
@@ -227,6 +232,18 @@ class OpenCLEmitter:
         # This preserves the programmer's explicit intent
         inner = self.emit(node.expression)
         return f"({inner})"
+
+    def emit_CommaExpression(self, node: IR.CommaExpression) -> str:
+        """
+        Emit a comma (sequence) expression `a, b`.
+
+        The enclosing ParenthesizedExpression supplies the grouping parens, so
+        this only joins the operands. Nested CommaExpressions flatten naturally
+        (`a, b, c`).
+        """
+        left = self.emit(node.left)
+        right = self.emit(node.right)
+        return f"{left}, {right}"
 
     def emit_CallExpression(self, node: IR.CallExpression) -> str:
         """
@@ -370,8 +387,8 @@ class OpenCLEmitter:
         ternary_precedence = PRECEDENCE['?:']
 
         condition = self.emit(node.condition, ternary_precedence)
-        true_expr = self.emit(node.true_expr, ternary_precedence)
-        false_expr = self.emit(node.false_expr, ternary_precedence)
+        true_expr = self._emit_ternary_branch(node.true_expr, ternary_precedence)
+        false_expr = self._emit_ternary_branch(node.false_expr, ternary_precedence)
 
         code = f"{condition} ? {true_expr} : {false_expr}"
 
@@ -379,6 +396,20 @@ class OpenCLEmitter:
         if ternary_precedence < parent_precedence:
             code = f"({code})"
 
+        return code
+
+    def _emit_ternary_branch(self, node: IR.TransformedNode, prec: int) -> str:
+        """Emit a ternary operand, parenthesizing an assignment branch.
+
+        GLSL allows an assignment as a `?:` operand (`cond ? a=b : c=d`), but
+        C/OpenCL's third operand is only a conditional-expression, so the bare
+        text reparses as `(cond ? a=b : c) = d` — a non-lvalue ternary result:
+        "expression is not assignable". Wrapping the assignment restores the
+        GLSL grouping.
+        """
+        code = self.emit(node, prec)
+        if isinstance(node, IR.AssignmentOp):
+            code = f"({code})"
         return code
 
     def emit_AssignmentOp(self, node: IR.AssignmentOp) -> str:
@@ -575,6 +606,18 @@ class OpenCLEmitter:
                 init = f"{node.init.type_name} {node.init.name}"
                 if node.init.initializer:
                     init += f" = {self.emit(node.init.initializer)}"
+            elif isinstance(node.init, IR.DeclarationList):
+                # Multi-declarator init (`for (vec2 R = .., U = ..; ...)`):
+                # emit comma-separated and inline. emit_DeclarationList would
+                # add the statement indent + trailing ';' + newline, giving a
+                # malformed `for (INIT;\n; cond; upd)` header (category AB).
+                declarator_parts = []
+                for decl in node.init.declarators:
+                    part = decl.name
+                    if decl.initializer:
+                        part += f" = {self._emit_initializer(decl.initializer)}"
+                    declarator_parts.append(part)
+                init = f"{node.init.type_name} {', '.join(declarator_parts)}"
             else:
                 # Expression: emit without indentation
                 init = self.emit(node.init)
@@ -767,10 +810,11 @@ class OpenCLEmitter:
         else:
             parts.append(node.type_name)
 
-        # Name (array params carry their bracket suffix: float3 pts[4])
+        # Name (array params carry their bracket suffix: float3 pts[4]).
+        # Unnamed prototype params (`float Fn(float3);`) emit the type alone.
         if node.array_suffix:
             parts.append(node.name + node.array_suffix)
-        else:
+        elif node.name:
             parts.append(node.name)
 
         return ' '.join(parts)
@@ -787,6 +831,14 @@ class OpenCLEmitter:
         """
         # Function signature
         params = ', '.join(self.emit(p) for p in node.parameters)
+
+        # Prototype / forward declaration (category S): no body, emit `sig;`.
+        if node.is_prototype:
+            result = f"{node.return_type} {node.name}({params});"
+            if node.overloadable:
+                result = "__attribute__((overloadable))\n" + result
+            return result
+
         result = f"{node.return_type} {node.name}({params}) "
 
         # OpenCL C has no overloading; user functions are marked overloadable so
@@ -803,6 +855,18 @@ class OpenCLEmitter:
     # ========================================================================
     # Preprocessor Directives (Session 9)
     # ========================================================================
+
+    def emit_Comment(self, node: IR.Comment) -> str:
+        """
+        Emit a preserved file-scope comment verbatim (license/attribution).
+
+        Args:
+            node: Comment node
+
+        Returns:
+            Comment text with newline
+        """
+        return f"{node.text}\n"
 
     def emit_PreprocessorDirective(self, node: IR.PreprocessorDirective) -> str:
         """

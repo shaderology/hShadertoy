@@ -22,6 +22,9 @@ Usage:
 import re
 from typing import List, Set
 
+from .conditional_eval import maybe_preprocess_directives
+from .macro_expander import maybe_expand_function_macros
+
 
 class PreprocessorTransformer:
     """
@@ -75,11 +78,48 @@ class PreprocessorTransformer:
             'bvec2': 'int2',
             'bvec3': 'int3',
             'bvec4': 'int4',
+            # HLSL-style aliases (`#define float2 vec2`) used as constructors
+            # inside macro / #if bodies: float2(x,y) -> (float2)(x,y). AST call
+            # sites are aliased in ast_transformer; these textual regions are
+            # not, so they must be cast here. Map name -> itself.
+            'float2': 'float2', 'float3': 'float3', 'float4': 'float4',
+            'int2': 'int2', 'int3': 'int3', 'int4': 'int4',
+            'uint2': 'uint2', 'uint3': 'uint3', 'uint4': 'uint4',
+        }
+
+        # GLSL scalar type constructors that become C-style casts
+        # float(x) -> (float)(x)  (category V; OpenCL has no float(x) function)
+        # Maps GLSL type name to OpenCL type name
+        self.scalar_types = {
+            'float': 'float',
+            'int': 'int',
+            'uint': 'uint',
+            'bool': 'bool',
+        }
+
+        # GLSL matrix types (category J). Constructors map to the overloadable
+        # GLSL_matN dispatcher (matrix_ops.h resolves any GLSL arg shape);
+        # bare type spellings in declarations map to the OpenCL matrix struct
+        # type (Houdini typedefs the GLSL spelling `mat2` as float4, so an
+        # untransformed `mat2 R = ...` inside a #if block miscompiles).
+        self.matrix_types = {
+            'mat2': 'matrix2x2',
+            'mat3': 'matrix3x3',
+            'mat4': 'matrix4x4',
         }
 
         # Track if we're inside a preprocessor conditional block
         # This helps us know whether to transform code lines
         self.inside_conditional = False
+
+        # Macros whose body is a matrix constructor expression, e.g.
+        # `#define rot(a) mat2(cos(a),-sin(a),sin(a),cos(a))`. These are
+        # matrix-returning "functions" that the AST cannot type (the #define
+        # is opaque to it), so `p *= rot(a)` at a use site would emit a raw
+        # `float2 *= matrix2x2`. transpile() seeds these into the AST's
+        # user_function_return_types so the matmul dispatcher fires. Maps
+        # macro name -> GLSL matrix type ('mat2' | 'mat3' | 'mat4').
+        self.matrix_macros = {}
 
     def transform(self, source: str) -> str:
         """
@@ -91,6 +131,21 @@ class PreprocessorTransformer:
         Returns:
             Transformed source code with OpenCL preprocessor directives
         """
+        # Stage 0 (category G, Session 38): evaluate/strip constant conditionals
+        # and, if the source still fails to parse, expand object-like macro
+        # uses (the bounded preprocessing cascade in conditional_eval.py).
+        # Gated on parse-failure exactly like the function-macro expander
+        # below: a shader that already parses is returned byte-identical.
+        source = maybe_preprocess_directives(source)
+
+        # Stage 0a (category P cluster 5): expand function-like macro USES on raw
+        # GLSL so tree-sitter can parse their (otherwise invalid) call sites. Runs
+        # first, before the body/#if-region transforms below, so expanded tokens
+        # are seen as ordinary code by the normal AST path (no double-prefixing).
+        # Gated on parse-failure: a shader that already parses is left untouched
+        # (OpenCL expands its macros), so a passing shader can never regress.
+        source = maybe_expand_function_macros(source)
+
         lines = source.split('\n')
         transformed_lines = []
 
@@ -177,6 +232,14 @@ class PreprocessorTransformer:
         # Transform the macro body
         transformed_body = self._transform_macro_body(body)
 
+        # Record matrix-returning macros (body is a bare matrix ctor
+        # expression). The outermost token decides the return type, so a
+        # statement macro (`v *= mat2(...)`) or a float-valued wrapper
+        # (`length(fract(p*=mat2(...)))`) is correctly excluded.
+        mm = re.match(r'\s*GLSL_(mat[234])\s*\(', transformed_body)
+        if mm:
+            self.matrix_macros[macro_name] = mm.group(1)
+
         # Reconstruct the line
         result = f"{indent}#define {macro_name}{params}"
         if transformed_body:
@@ -229,8 +292,9 @@ class PreprocessorTransformer:
 
         Applies:
         1. Vector constructor cast syntax: vec2(...) -> (float2)(...)
-        2. Float literal suffix: 3.14159 -> 3.14159f
-        3. Function call prefix: sin(x) -> GLSL_sin(x)
+        2. Scalar constructor cast syntax: float(...) -> (float)(...)
+        3. Float literal suffix: 3.14159 -> 3.14159f
+        4. Function call prefix: sin(x) -> GLSL_sin(x)
 
         Args:
             body: Macro body string
@@ -261,6 +325,35 @@ class PreprocessorTransformer:
                 return f'({opencl_type})('
 
             body = re.sub(pattern, replace_constructor, body)
+
+        # Step 1a: Transform matrix constructors to the overloadable GLSL_matN
+        # dispatcher — mat2(c,s,-s,c) -> GLSL_mat2(c,s,-s,c),
+        # mat2(cos(a+vec4(...))) -> GLSL_mat2((float4)(...)), mat4(1.0) ->
+        # GLSL_mat4(1.0) (diagonal). GLSL_mat2/3/4 are overloadable in
+        # matrix_ops.h, so every GLSL matrix-ctor arg shape resolves without
+        # counting components textually. Must run BEFORE the bare-type map
+        # (Step 1c) so `mat2(` is consumed here, not rewritten to `matrix2x2(`.
+        for glsl_type in self.matrix_types:
+            pattern = r'(?<!GLSL_)\b' + re.escape(glsl_type) + r'\s*\('
+            body = re.sub(pattern, f'GLSL_{glsl_type}(', body)
+
+        # Step 1b: Transform scalar type constructors to cast syntax
+        # float(x) -> (float)(x), int(x) -> (int)(x), etc. (category V)
+        # Word boundary + required '(' means declarations (`float x`),
+        # existing casts (`(float)(x)`) and identifiers embedding a type name
+        # (`intersect(`, `convert_float(`) never match.
+        for glsl_type, opencl_type in self.scalar_types.items():
+            pattern = r'\b' + re.escape(glsl_type) + r'\s*\('
+            body = re.sub(pattern, f'({opencl_type})(', body)
+
+        # Step 1c: Map bare matrix type spellings in declarations / casts
+        # (mat2 R = ...) to the OpenCL matrix struct type. Constructors were
+        # already rewritten to GLSL_matN in Step 1a, so a remaining `matN`
+        # token is a type name. `\b` on both sides leaves GLSL_matN and
+        # composite identifiers (GLSL_mul_vec2_mat2) untouched.
+        for glsl_type, opencl_type in self.matrix_types.items():
+            pattern = r'(?<!GLSL_)\b' + re.escape(glsl_type) + r'\b'
+            body = re.sub(pattern, opencl_type, body)
 
         # Step 2: Transform float literals
         # Pattern: number with decimal point or exponent, not followed by 'f' or 'F'

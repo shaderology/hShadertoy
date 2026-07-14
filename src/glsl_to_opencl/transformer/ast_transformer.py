@@ -53,6 +53,78 @@ OPENCL_TO_GLSL_NAME = {
     'uint2': 'uvec2', 'uint3': 'uvec3', 'uint4': 'uvec4',
 }
 
+# Matrix type name (either family — declarations record 'mat3', parameters
+# record 'matrix3x3') -> canonical GLSL name, for matrix cast helper naming
+# (GLSL_mat3_from_mat4) and identity detection in matrix constructors.
+MATRIX_NAME_TO_GLSL = {
+    'mat2': 'mat2', 'mat3': 'mat3', 'mat4': 'mat4',
+    'matrix2x2': 'mat2', 'matrix3x3': 'mat3', 'matrix4x4': 'mat4',
+}
+
+# Function names defined by the Houdini OpenCL headers that `main_header.cl`
+# `#include`s (<interpolate.h>, <matrix.h>, <random.h>, <imx.h>, <imx_filter.h>
+# and their transitive includes <typedefines.h>/<util.h>/<imx_internal.h>/
+# <imx_filter_internal.h>). A user function of the same name collides: Session 1
+# marks user definitions `__attribute__((overloadable))`, but these Houdini
+# builtins are UNMARKED, so clang rejects the pair with "redeclaration of X must
+# not have the 'overloadable' attribute" + "redefinition of X" (category D2 —
+# e.g. shaders defining their own `rotate2D`, `lerp`, `fit`). Such a user
+# function is renamed to `sh_<name>` at its definition, forward-declaration
+# prototype, and every call site (see `_collect_function_renames`). Names that
+# GLSL already remaps elsewhere (the `glsl_builtins` → `GLSL_*` set and the type
+# constructors) are intentionally excluded so the rename never desyncs a call
+# that was rewritten to `GLSL_*`. Extracted from the headers of Houdini
+# 21.0.440; regenerate if the bundled Houdini version changes.
+HOUDINI_RESERVED_FUNCTIONS = {
+    'CREATE_RAND', 'CREATE_RANDOM', 'SYSfastRandom', 'SYSfloorIL',
+    'SYSwang_inthash', 'applySTXform', 'applySTXformInverse',
+    'applySTXformInverseVec', 'applySTXformVec', 'asfpreal2', 'asfpreal3',
+    'asfpreal4', 'bilinear_interp', 'bilinear_interp_val', 'bilinear_interp_vol',
+    'bufferSampleRectClipF4', 'bufferSampleRectF4', 'bufferToImage',
+    'bufferToImageVec', 'bufferToPixel', 'bufferToPixelVec', 'bufferToTexture',
+    'bufferToTextureVec', 'build_float2', 'build_float3', 'build_float4',
+    'centerFromFace', 'computeSubdCurveCoeffsAndIndices',
+    'constImageSampleRectClip', 'cornerFromCenter', 'cornerFromCenter2d',
+    'dCdxF4', 'dCdxF4aligned', 'dCdyF4', 'dCdyF4aligned', 'det3', 'diag3',
+    'dudxAligned', 'dudxAlignedFace', 'dudxCenterAtCorner',
+    'dudxCenterAtCorner2d', 'dudxCenterAtFace', 'dudxFaceAtCenter',
+    'evaluateCubicCoeffs_3', 'evaluateCubicCoeffs_vload3', 'faceFromCenter',
+    'fit', 'fit01', 'fitTo01', 'image3ToWorld', 'image3ToWorldVec',
+    'imageToBuffer', 'imageToBufferVec', 'imageToWorld', 'imageToWorldVec',
+    'lerp', 'lerpConstant', 'lerpConstant3', 'linesegInterpolationWeights',
+    'mat2det', 'mat2fromcols', 'mat2inv', 'mat2mul', 'mat2vecmul',
+    'mat3Tvec2mul', 'mat3Tvecmul', 'mat3add', 'mat3copy', 'mat3diag',
+    'mat3fromcols', 'mat3fromcolsd', 'mat3identity', 'mat3inv', 'mat3invtol',
+    'mat3isPD', 'mat3issym', 'mat3lcombine', 'mat3lincomb2', 'mat3load',
+    'mat3makesym', 'mat3mul', 'mat3mulT', 'mat3scale', 'mat3solve_LDLT',
+    'mat3store', 'mat3sub', 'mat3vec2mul', 'mat3vecmul', 'mat3zero',
+    'mat43vec3mul', 'mat4identity', 'mat4invert', 'mat4solvecol', 'mat4vec2mul',
+    'mat4vec3mul', 'mat4vecmul', 'mitchell', 'outerprod3', 'pixelToBuffer',
+    'pixelToBufferVec', 'quadInterpolationWeights', 'rotate2D', 'sampleLookup',
+    'squaredNorm2', 'squaredNorm3', 'tetInterpolationWeights', 'textureToBuffer',
+    'textureToBufferVec', 'trace3', 'transpose2', 'transpose3', 'transpose3d',
+    'triInterpolationWeights', 'trilinear_interp', 'trilinear_interp_val',
+    'trilinear_interp_vol', 'vec3prod', 'vec3sum', 'vload2f', 'vload3f',
+    'vload4f', 'vstore3f', 'vstore4f', 'wh_from_dP', 'worldToImage',
+    'worldToImage3', 'worldToImage3Vec', 'worldToImageVec',
+}
+
+# GLSL swizzle set 'stpq' has no OpenCL equivalent; remap to 'xyzw' once the
+# base is proven to be a vector (struct fields named s/t/p/q must survive).
+STPQ_TO_XYZW = str.maketrans('stpq', 'xyzw')
+
+
+def _strip_type_qualifiers(type_name: str) -> str:
+    """Return the bare type name, dropping any leading address-space / const
+    qualifiers. Parameter types can arrive as e.g. `const matrix3x3` or
+    `__global matrix4x4` (the type-name string carries the qualifier), which
+    would defeat a bare-name lookup. Taking the last whitespace-separated
+    token yields the underlying type."""
+    if not type_name:
+        return type_name
+    parts = type_name.split()
+    return parts[-1] if parts else type_name
+
 
 class TransformationError(Exception):
     """Raised when transformation fails."""
@@ -98,6 +170,12 @@ class ASTTransformer:
         # Maps variable name -> GLSL type name
         self.local_types = {}
 
+        # Names declared as arrays (e.g. `mat3 arr[4]`). local_types stores the
+        # element type for arrays, so an array-of-matrix and a bare matrix are
+        # indistinguishable by type alone; this set keeps the matrix column
+        # subscript rewrite (M[i] -> M.cols[i]) from firing on array indexing.
+        self.array_vars = set()
+
         # Track pointer parameters in current function (for out/inout handling)
         # Set of parameter names that are pointers (need * dereference on assignment)
         self.pointer_params = set()
@@ -111,21 +189,63 @@ class ASTTransformer:
         # Hosts may override per renderpass type.
         self.entry_function = 'mainImage'
 
-        # Track function signatures for handling call sites with out parameters
-        # Maps function name -> list of parameter info (name, is_pointer)
+        # Set per-shader in transform(): True when the source supplies its own
+        # gl_FragCoord (#define or declaration), so category-Q injection is off.
+        self._gl_fragcoord_user_provided = False
+
+        # Track function signatures for handling call sites with out parameters.
+        # Maps function name -> {arity: list of parameter info (name, is_pointer)}.
+        # Bucketing by arity disambiguates overloaded functions (e.g. a by-value
+        # `intersect(a,b)` vs an out-param `intersect(a,b,c,d)`): a call selects
+        # the overload whose parameter count matches its argument count.
         self.function_signatures = {}
 
         # Register GLSL built-in functions with out parameters
         # modf(x, out i) - returns fractional part, stores integer part in i
-        self.function_signatures['GLSL_modf'] = [
-            ('x', False),  # input value
-            ('i', True)    # output pointer (out parameter)
-        ]
+        self.function_signatures['GLSL_modf'] = {
+            2: [
+                ('x', False),  # input value
+                ('i', True)    # output pointer (out parameter)
+            ]
+        }
+
+        # Copy-in/copy-out state for vector-swizzle out-args. A swizzle (`p.xz`,
+        # even `p.z`) is not an addressable lvalue in OpenCL, so a swizzle passed
+        # to an out/inout param is lowered to a temp: `{ T _cico = p.xz;
+        # f(&_cico); p.xz = _cico; }`. `_cico_active` is set only while
+        # transforming an expression-statement (the drain point); the prelude
+        # (temp decls) and writeback (copy-out assignments) buffers are drained
+        # there into a wrapping CompoundStatement.
+        self._cico_active = False
+        self._cico_counter = 0
+        self._cico_prelude = []
+        self._cico_writeback = []
 
         # Track user-defined function return types for matrix operation detection
         # Maps function name -> GLSL type name (e.g., 'foo' -> 'mat2')
         # This is populated during transformation when function definitions are encountered
         self.user_function_return_types = {}
+
+        # Category D2 — user functions whose name collides with a Houdini header
+        # builtin (HOUDINI_RESERVED_FUNCTIONS). Maps original GLSL name ->
+        # `sh_<name>` emitted name. Populated by `_collect_function_renames` in a
+        # pre-scan (so call sites rename regardless of definition order), applied
+        # at the definition, prototype, and every call site. The tracking dicts
+        # above stay keyed by the ORIGINAL name — only the emitted identifier
+        # changes.
+        self.function_renames = {}
+
+        # Category AE — every user-defined function name (definitions +
+        # prototypes), collected by `_collect_function_renames` in the same
+        # pre-scan. Used to detect a LOCAL variable that shadows a function.
+        self.user_function_names = set()
+
+        # Category AE — active local-variable renames in the CURRENT function
+        # body. A local declaration whose name shadows a user function
+        # (`float ao = ao(p);`) is renamed (`ao` -> `ao_v`) so the same-name
+        # call keeps resolving to the function instead of the local value.
+        # Maps original name -> emitted name; reset per function body.
+        self.local_renames = {}
 
         # Track current function's return type during body transformation
         # Used to detect if return statements need special handling
@@ -204,14 +324,43 @@ class ASTTransformer:
                 ast.start_point
             )
 
+        # Category Q — gl_FragCoord builtin. Skip our body-local injection when
+        # the shader already supplies gl_FragCoord itself: a `#define
+        # gl_FragCoord ...` (would rewrite our injected decl into a redefinition)
+        # or an own `vec4 gl_FragCoord` declaration. See
+        # _transform_function_definition.
+        src = ast.text
+        self._gl_fragcoord_user_provided = bool(
+            re.search(r'#\s*define\s+gl_FragCoord\b', src)
+            or re.search(r'\b(?:vec4|float4)\s+gl_FragCoord\b', src)
+        )
+
+        # Category D2 — pre-scan for user functions colliding with a Houdini
+        # header builtin; build the rename map before any call site is walked so
+        # renaming is order-independent (recursion, call-before-definition).
+        self._collect_function_renames(ast)
+
         # Transform all top-level declarations. Top-level declarations are at
         # program (file) scope; hoisted_global_inits is (re)populated here.
         self.hoisted_global_inits = []
         self._global_scope = True
         declarations = []
         for decl in ast.named_children:
+            # Preserve file-scope comments verbatim (license/attribution
+            # blocks — Shadertoy code is CC-licensed). Comments elsewhere
+            # (statement/expression positions) are still dropped.
+            if decl.type == 'comment':
+                declarations.append(IR.Comment(
+                    text=decl.text,
+                    source_location=decl.start_point
+                ))
+                continue
             transformed = self._transform_node(decl)
-            if transformed is not None:
+            # Category AH — a struct-definition-with-variable declaration returns
+            # [StructDefinition, Declaration]; splice both in as siblings.
+            if isinstance(transformed, list):
+                declarations.extend(transformed)
+            elif transformed is not None:
                 declarations.append(transformed)
         self._global_scope = False
 
@@ -219,6 +368,43 @@ class ASTTransformer:
             declarations=declarations,
             source_location=ast.start_point
         )
+
+    def _collect_function_renames(self, ast: ASTNode) -> None:
+        """Category D2 — pre-scan top-level function definitions and prototypes
+        for names that collide with a Houdini header builtin
+        (HOUDINI_RESERVED_FUNCTIONS) and populate `self.function_renames` with
+        `name -> sh_<name>`.
+
+        A user function of a reserved name emits an `overloadable` definition
+        that clang refuses to place beside the unmarked Houdini builtin of the
+        same name, so a shader defining such a name ALWAYS fails to compile
+        today — the rename can only fix, never regress. Only user-defined names
+        are collected here, so calls to the Houdini builtin itself (which the
+        user never defines) are never rewritten.
+        """
+        self.function_renames = {}
+        # Category AE — collected in the same walk (see __init__).
+        self.user_function_names = set()
+
+        def _reserve(func_name: str) -> None:
+            if func_name and func_name in HOUDINI_RESERVED_FUNCTIONS:
+                self.function_renames[func_name] = f"sh_{func_name}"
+
+        for decl in ast.named_children:
+            if decl.type == 'function_definition':
+                if decl.name:
+                    self.user_function_names.add(decl.name)
+                _reserve(decl.name)
+            elif decl.type == 'declaration':
+                # A body-less prototype: `float rotate2D(vec2, float);`
+                for child in decl.named_children:
+                    if child.type == 'function_declarator':
+                        for gc in child.children:
+                            if gc.type == 'identifier':
+                                self.user_function_names.add(gc.text)
+                                _reserve(gc.text)
+                                break
+                        break
 
     def _transform_node(self, node: ASTNode) -> Optional[IR.TransformedNode]:
         """
@@ -259,6 +445,7 @@ class ASTTransformer:
             'assignment_expression': self._transform_assignment_expression,
             'update_expression': self._transform_update_expression,
             'parenthesized_expression': self._transform_parenthesized_expression,
+            'comma_expression': self._transform_comma_expression,
             # Struct definitions
             'struct_specifier': self._transform_struct_specifier,
             # Preprocessor directives (Session 9)
@@ -333,8 +520,14 @@ class ASTTransformer:
         symbol = self.symbol_table.lookup(name)
         glsl_type = symbol.glsl_type if symbol else None
 
+        # Category AE — a read of a local that shadows a user function is
+        # emitted under its renamed name (see _transform_declaration). Call
+        # callees are not routed through here, so the function call keeps the
+        # original name.
+        emit_name = self.local_renames.get(name, name)
+
         ident = IR.Identifier(
-            name=name,
+            name=emit_name,
             glsl_type=glsl_type,
             source_location=node.start_point
         )
@@ -384,6 +577,21 @@ class ASTTransformer:
         if isinstance(node, IR.ParenthesizedExpression):
             return self._get_type_name(node.expression)
 
+        # Sign/complement/inc/dec preserve the operand's type; without this a
+        # negated column (-f) defeats matrix ctor / vector detection
+        # (categories C/E). '!' excluded: its result is bool, not operand type.
+        # '*' (pointer-param deref, produced by _transform_identifier for
+        # out/inout reads) also passes through: local_types registers the
+        # POINTEE type under the param name, so *p has p's registered type.
+        if isinstance(node, IR.UnaryOp) and node.operator in ('-', '+', '~', '++', '--', '*'):
+            return self._get_type_name(node.operand)
+
+        # An assignment expression (`x = ...`, `o /= s`) evaluates to its
+        # target; without this `ivec2(o /= .7)` can't see o's vector type and
+        # falls back to the invalid (int2)(float2) cast (category N).
+        if isinstance(node, IR.AssignmentOp):
+            return self._get_type_name(node.target)
+
         # For identifiers, check local type environment first
         if isinstance(node, IR.Identifier):
             if node.name in self.local_types:
@@ -408,6 +616,24 @@ class ASTTransformer:
         if type_str and not type_str.startswith('<'):
             return type_str
 
+        return None
+
+    def _glsl_type_from_name(self, type_name: Optional[str]):
+        """
+        GLSLType for a type name from EITHER naming family ('vec3'/'float3',
+        'mat3'/'matrix3x3'), tolerating qualifier prefixes ('const matrix3x3').
+        A struct type name is returned as the bare name string so nested member
+        access (a.b.c) can keep resolving through struct_types. None if unknown.
+        """
+        if not type_name:
+            return None
+        bare = _strip_type_qualifiers(type_name)
+        glsl = OPENCL_TO_GLSL_NAME.get(bare, MATRIX_NAME_TO_GLSL.get(bare, bare))
+        resolved = TYPE_NAME_MAP.get(glsl)
+        if resolved is not None:
+            return resolved
+        if bare in self.struct_types:
+            return bare
         return None
 
     def _is_bool_mask(self, node: IR.TransformedNode) -> str:
@@ -448,6 +674,37 @@ class ASTTransformer:
         (scalar broadcast, component list, identity, widening, unknown
         argument type) so the caller falls through unchanged.
         """
+        # Scalar-from-vector: GLSL float(vecN)/int(vecN)/uint(vecN)/bool(vecN)
+        # extracts component .x (then converts the scalar). OpenCL rejects the
+        # C cast (float)(float3_expr) just as it does the vector cast; emit
+        # arg.x, wrapping in a scalar cast when the element base also changes
+        # (int(vec3) -> (int)(vec3.x)). A scalar-argument ctor keeps the plain
+        # cast (its arg_info is None below).
+        if function_name in ('float', 'int', 'uint', 'bool'):
+            arg_type = self._get_type_name(arg)
+            arg_info = VECTOR_TYPE_INFO.get(arg_type) if arg_type else None
+            if arg_info is None:
+                return None  # scalar / unknown argument: keep the plain cast
+            arg_base, _ = arg_info
+            base = arg
+            if isinstance(arg, (IR.BinaryOp, IR.UnaryOp, IR.TernaryOp)):
+                base = IR.ParenthesizedExpression(
+                    expression=arg, source_location=location)
+            dot_x = IR.MemberAccess(
+                base=base,
+                member='x',
+                glsl_type=TYPE_NAME_MAP.get(arg_base),
+                source_location=location
+            )
+            if arg_base == function_name:
+                return dot_x  # base already matches: .x is the scalar
+            return IR.TypeConstructor(
+                type_name=opencl_type,
+                arguments=[dot_x],
+                glsl_type=TYPE_NAME_MAP.get(function_name),
+                source_location=location
+            )
+
         target = VECTOR_TYPE_INFO.get(function_name)
         if target is None:
             return None  # scalar/matrix/sampler constructor: not this rewrite
@@ -539,8 +796,10 @@ class ASTTransformer:
         """
         if not type_name:
             return False
-        # Check both GLSL and OpenCL matrix names
-        return type_name in ['mat2', 'mat3', 'mat4', 'matrix2x2', 'matrix3x3', 'matrix4x4']
+        # Check both GLSL and OpenCL matrix names, seeing through a leading
+        # qualifier prefix (const / __global) that parameter types carry.
+        bare = _strip_type_qualifiers(type_name)
+        return bare in ['mat2', 'mat3', 'mat4', 'matrix2x2', 'matrix3x3', 'matrix4x4']
 
     def _are_all_vector_type(
         self,
@@ -744,15 +1003,19 @@ class ASTTransformer:
             return None
 
         # Validate swizzle pattern
-        # GLSL allows xyzw (coordinate) or rgba (color), but not mixed
+        # GLSL allows xyzw (coordinate), rgba (color) or stpq (texcoord),
+        # but not mixed
         coord_chars = set('xyzw')
         color_chars = set('rgba')
         swizzle_chars = set(swizzle)
 
+        texcoord_chars = set('stpq')
+
         is_coord = swizzle_chars.issubset(coord_chars)
         is_color = swizzle_chars.issubset(color_chars)
+        is_texcoord = swizzle_chars.issubset(texcoord_chars)
 
-        if not (is_coord or is_color):
+        if not (is_coord or is_color or is_texcoord):
             # Invalid swizzle pattern (mixed or invalid characters)
             return None
 
@@ -807,7 +1070,10 @@ class ASTTransformer:
             'matrix2x2': 'mat2', 'matrix3x3': 'mat3', 'matrix4x4': 'mat4'
         }
 
-        # Normalize to GLSL names for lookup
+        # Normalize to GLSL names for lookup (stripping qualifier prefixes
+        # like 'const matrix3x3' that parameter types can carry)
+        left_type = _strip_type_qualifiers(left_type)
+        right_type = _strip_type_qualifiers(right_type)
         left_glsl = opencl_to_glsl.get(left_type, left_type)
         right_glsl = opencl_to_glsl.get(right_type, right_type)
 
@@ -836,6 +1102,11 @@ class ASTTransformer:
         Returns:
             Function name like 'GLSL_mul_mat2_vec2', 'GLSL_mul_vec3_mat3', etc.
         """
+        # Qualifier prefixes ('const matrix3x3') pass _is_matrix_type but would
+        # defeat the exact-name dim lookup below.
+        left_type = _strip_type_qualifiers(left_type)
+        right_type = _strip_type_qualifiers(right_type)
+
         # Extract matrix/vector dimensions from type names
         # Handles both GLSL (mat2, vec2) and OpenCL (matrix2x2, float2) names
         def get_dim(type_name):
@@ -873,6 +1144,29 @@ class ASTTransformer:
         # Fallback to generic (shouldn't happen)
         return 'GLSL_mul'
 
+    def _widest_vector_arg_type(
+        self,
+        arguments: List[IR.TransformedNode]
+    ) -> Optional[str]:
+        """
+        Type name of the widest-vector argument (genType result of a
+        broadcasting builtin like min/max/clamp/step/smoothstep/mix/pow/mod).
+        Scalars broadcast to the vector, so the result width follows the widest
+        arg. Falls back to the first typed argument when none is a vector.
+        """
+        best = None
+        best_width = -1
+        for arg in arguments:
+            type_name = self._get_type_name(arg)
+            if not type_name:
+                continue
+            info = VECTOR_TYPE_INFO.get(_strip_type_qualifiers(type_name))
+            width = info[1] if info else 0
+            if width > best_width:
+                best_width = width
+                best = type_name
+        return best
+
     def _infer_builtin_function_type(
         self,
         function_name: str,
@@ -893,12 +1187,24 @@ class ASTTransformer:
         """
         from ..analyzer.type_checker import TYPE_NAME_MAP
 
-        # Matrix functions - return same type as input
-        if function_name.startswith('GLSL_transpose') or function_name.startswith('GLSL_inverse'):
+        # Matrix functions - return same type as input. Normalize the argument
+        # type (parameters register OpenCL names like 'matrix3x3', possibly
+        # qualified) or inverse(param) * v silently misses matmul detection.
+        if (function_name.startswith('GLSL_transpose')
+                or function_name.startswith('GLSL_inverse')
+                or function_name.startswith('GLSL_matrixCompMult')):
             if arguments:
                 arg_type = self._get_type_name(arguments[0])
-                if arg_type:
-                    return TYPE_NAME_MAP.get(arg_type)
+                resolved = self._glsl_type_from_name(arg_type)
+                if isinstance(resolved, GLSLType):
+                    return resolved
+
+        # outerProduct(vecN, vecN) -> matN
+        elif function_name == 'GLSL_outerProduct' and arguments:
+            arg_type = _strip_type_qualifiers(self._get_type_name(arguments[0]))
+            vec_info = VECTOR_TYPE_INFO.get(arg_type) if arg_type else None
+            if vec_info:
+                return TYPE_NAME_MAP.get(f'mat{vec_info[1]}')
 
         # Determinant - always returns float
         elif function_name.startswith('GLSL_determinant'):
@@ -906,7 +1212,10 @@ class ASTTransformer:
 
         # Vector functions that return the same type as their first argument
         # normalize, abs, sign, floor, ceil, trunc, fract, sqrt, inversesqrt, etc.
+        # `round`/`roundEven` map to the NATIVE OpenCL round (no GLSL_ prefix),
+        # so they must be listed by their bare name — ivec2(round(uv)) (Xs3fRB).
         vector_passthrough_functions = [
+            'round', 'roundEven',
             'GLSL_normalize', 'GLSL_abs', 'GLSL_sign', 'GLSL_floor', 'GLSL_ceil',
             'GLSL_trunc', 'GLSL_fract', 'GLSL_sqrt', 'GLSL_inversesqrt',
             'GLSL_exp', 'GLSL_log', 'GLSL_exp2', 'GLSL_log2',
@@ -929,10 +1238,12 @@ class ASTTransformer:
             return TYPE_NAME_MAP.get('vec3')
 
         # Functions that return the same type as their arguments (with multiple args)
-        # min, max, clamp, mix, step, smoothstep, pow, mod
+        # min, max, clamp, mix, step, smoothstep, pow, mod. GLSL broadcasts
+        # scalars, so the genType result follows the WIDEST argument, not arg[0]
+        # — `step(0.25, p3)` returns vec3 (4ljyRc), not float.
         elif function_name in ['GLSL_min', 'GLSL_max', 'GLSL_clamp', 'GLSL_mix',
                                 'GLSL_step', 'GLSL_smoothstep', 'GLSL_pow', 'GLSL_mod'] and arguments:
-            arg_type = self._get_type_name(arguments[0])
+            arg_type = self._widest_vector_arg_type(arguments)
             if arg_type:
                 return TYPE_NAME_MAP.get(
                     OPENCL_TO_GLSL_NAME.get(arg_type, arg_type))
@@ -985,8 +1296,13 @@ class ASTTransformer:
         if not left_type or not right_type:
             return None
 
-        # For arithmetic operations (+, -, *, /, %)
-        if operator in ['+', '-', '*', '/', '%']:
+        # For arithmetic operations (+, -, *, /, %) and bitwise/shift ops
+        # (&, |, ^, <<, >>). GLSL bitwise ops apply only to int/uint scalars
+        # and vectors and follow the same promotion shape as arithmetic
+        # (vec op scalar -> vec, vec op vec -> vec, shift keeps the left type
+        # since the left operand dominates). Without this, `iuv & 7` infers no
+        # type and vec2(iuv & 7) falls back to the invalid (float2)(int2) cast.
+        if operator in ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>']:
             # Scalar op scalar = scalar
             if self._is_scalar_type(left_type) and self._is_scalar_type(right_type):
                 # Return the "larger" type (float > int > uint)
@@ -996,26 +1312,21 @@ class ASTTransformer:
                     return TYPE_NAME_MAP.get('int')
                 return TYPE_NAME_MAP.get(left_type)
 
-            # Vector op vector = vector (same type)
+            # Vector op vector = vector (same type). Normalize BEFORE the
+            # TYPE_NAME_MAP lookup: parameters register OpenCL names
+            # ('float2'), which TYPE_NAME_MAP does not know — the equal-name
+            # early return used to silently yield None for float2+float2.
             if self._is_vector_type(left_type) and self._is_vector_type(right_type):
-                if left_type == right_type:
-                    return TYPE_NAME_MAP.get(left_type)
-                # Handle GLSL vs OpenCL type names (vec3 vs float3)
-                opencl_to_glsl = {
-                    'float2': 'vec2', 'float3': 'vec3', 'float4': 'vec4',
-                    'int2': 'ivec2', 'int3': 'ivec3', 'int4': 'ivec4',
-                    'uint2': 'uvec2', 'uint3': 'uvec3', 'uint4': 'uvec4'
-                }
-                left_glsl = opencl_to_glsl.get(left_type, left_type)
-                right_glsl = opencl_to_glsl.get(right_type, right_type)
+                left_glsl = OPENCL_TO_GLSL_NAME.get(left_type, left_type)
+                right_glsl = OPENCL_TO_GLSL_NAME.get(right_type, right_type)
                 if left_glsl == right_glsl:
                     return TYPE_NAME_MAP.get(left_glsl)
 
             # Vector op scalar = vector (or scalar op vector = vector)
             if self._is_vector_type(left_type) and self._is_scalar_type(right_type):
-                return TYPE_NAME_MAP.get(left_type)
+                return TYPE_NAME_MAP.get(OPENCL_TO_GLSL_NAME.get(left_type, left_type))
             if self._is_scalar_type(left_type) and self._is_vector_type(right_type):
-                return TYPE_NAME_MAP.get(right_type)
+                return TYPE_NAME_MAP.get(OPENCL_TO_GLSL_NAME.get(right_type, right_type))
 
             # Matrix op scalar = matrix (or scalar op matrix = matrix)
             if self._is_matrix_type(left_type) and self._is_scalar_type(right_type):
@@ -1038,6 +1349,121 @@ class ASTTransformer:
 
         return None
 
+    def _resolve_binary_operand_type(
+        self,
+        operand: IR.TransformedNode,
+        type_name: Optional[str]
+    ) -> Optional[str]:
+        """
+        Resolve a binary operand's type name, falling back to the glsl_type
+        attribute of a CallExpression / BinaryOp (or a user function's return
+        type in the symbol table) when _get_type_name comes up empty. Needed so
+        matrix arithmetic detection works even when a side is an un-annotated
+        call or nested binary op (e.g. `m2 * (a / b)`).
+        """
+        if type_name:
+            return type_name
+        if isinstance(operand, IR.CallExpression):
+            if getattr(operand, 'glsl_type', None):
+                return str(operand.glsl_type)
+            if operand.function in self.symbol_table.symbols:
+                func_symbol = self.symbol_table.lookup(operand.function)
+                if func_symbol and hasattr(func_symbol, 'glsl_type'):
+                    return str(func_symbol.glsl_type)
+        if isinstance(operand, IR.BinaryOp):
+            if getattr(operand, 'glsl_type', None):
+                return str(operand.glsl_type)
+        return type_name
+
+    def _transform_matrix_componentwise(
+        self,
+        operator: str,
+        left: IR.TransformedNode,
+        right: IR.TransformedNode,
+        left_type: Optional[str],
+        right_type: Optional[str],
+        node: ASTNode
+    ) -> Optional[IR.TransformedNode]:
+        """
+        Category H: componentwise matrix arithmetic that OpenCL's struct matrix
+        types can't express with native operators.
+
+        GLSL semantics (all componentwise; `M + s` adds `s` to EVERY element,
+        not just the diagonal):
+          M * s, s * M -> GLSL_matN_muls(M, s)
+          M / s        -> GLSL_matN_divs(M, s)
+          s / M        -> GLSL_matN_rdiv(s, M)
+          M + s, s + M -> GLSL_matN_adds(M, s)
+          M - s        -> GLSL_matN_subs(M, s)
+          s - M        -> GLSL_matN_rsub(s, M)
+          M + M        -> GLSL_matN_add(A, B)
+          M - M        -> GLSL_matN_sub(A, B)
+          M / M        -> GLSL_matN_div(A, B)
+
+        Matrix * matrix for `*` is linear-algebra multiplication and is handled
+        by the caller before this runs, so it never reaches here. Returns None
+        for any non-matrix shape (leaving native emission intact).
+        """
+        left_mat = self._is_matrix_type(left_type)
+        right_mat = self._is_matrix_type(right_type)
+
+        # A "scalar" operand broadcasts componentwise. For +, -, / an operand
+        # that is neither matrix nor vector is necessarily scalar even when its
+        # type failed to infer (None), because vector±matrix / matrix/vector are
+        # illegal GLSL — so a matrix's partner under +,-,/ can only be a scalar.
+        # `*` stays strict (an untyped partner could be a vector -> matmul, which
+        # is handled by the caller; never steal it as a scalar scale).
+        def _is_scalar_operand(tn):
+            if self._is_scalar_type(tn):
+                return True
+            if operator == '*':
+                return False
+            return not self._is_matrix_type(tn) and not self._is_vector_type(tn)
+
+        left_scalar = (not left_mat) and _is_scalar_operand(left_type)
+        right_scalar = (not right_mat) and _is_scalar_operand(right_type)
+
+        # Size (2/3/4) comes from whichever operand is a matrix.
+        mat_type = left_type if left_mat else right_type
+        glsl_name = MATRIX_NAME_TO_GLSL.get(_strip_type_qualifiers(mat_type or ''))
+        if glsl_name is None:
+            return None
+        n = glsl_name[-1]  # '2' / '3' / '4'
+        result_type = TYPE_NAME_MAP.get(glsl_name)
+
+        function_name = None
+        arguments = None
+
+        if left_mat and right_scalar:
+            suffix = {'*': 'muls', '/': 'divs', '+': 'adds', '-': 'subs'}.get(operator)
+            if suffix:
+                function_name = f'GLSL_mat{n}_{suffix}'
+                arguments = [left, right]
+        elif left_scalar and right_mat:
+            if operator == '*':
+                function_name, arguments = f'GLSL_mat{n}_muls', [right, left]
+            elif operator == '+':
+                function_name, arguments = f'GLSL_mat{n}_adds', [right, left]
+            elif operator == '-':
+                function_name, arguments = f'GLSL_mat{n}_rsub', [left, right]
+            elif operator == '/':
+                function_name, arguments = f'GLSL_mat{n}_rdiv', [left, right]
+        elif left_mat and right_mat:
+            suffix = {'+': 'add', '-': 'sub', '/': 'div'}.get(operator)
+            if suffix:
+                function_name = f'GLSL_mat{n}_{suffix}'
+                arguments = [left, right]
+
+        if function_name is None:
+            return None
+
+        return IR.CallExpression(
+            function=function_name,
+            arguments=arguments,
+            glsl_type=result_type,
+            source_location=node.start_point
+        )
+
     def _transform_binary_expression(self, node: ASTNode) -> IR.TransformedNode:
         """
         Transform binary expression (a + b, x * y, etc.).
@@ -1051,72 +1477,104 @@ class ASTTransformer:
         right = self._transform_node(node.right)
         operator = node.operator
 
-        # Check for matrix multiplication operations
-        if operator == '*':
-            left_type = self._get_type_name(left)
-            right_type = self._get_type_name(right)
+        # Matrix arithmetic (categories: matrix mul, plus category H's
+        # componentwise scalar/matrix ops). Resolve operand type names with the
+        # call/binaryop fallbacks first so detection works for all of *, /, +, -.
+        if operator in ('*', '/', '+', '-'):
+            left_type = self._resolve_binary_operand_type(left, self._get_type_name(left))
+            right_type = self._resolve_binary_operand_type(right, self._get_type_name(right))
 
-            # Special handling for function calls that return matrices
-            # Check if left operand is a function call that returns a matrix type
-            if isinstance(left, IR.CallExpression) and not left_type:
-                # Try to infer type from glsl_type attribute first (set by _infer_builtin_function_type)
-                if hasattr(left, 'glsl_type') and left.glsl_type:
-                    left_type = str(left.glsl_type)
-                # Otherwise look up user-defined function in symbol table
-                elif left.function in self.symbol_table.symbols:
-                    func_symbol = self.symbol_table.lookup(left.function)
-                    if func_symbol and hasattr(func_symbol, 'glsl_type'):
-                        left_type = str(func_symbol.glsl_type)
-
-            # Check if right operand is a function call that returns a matrix type
-            if isinstance(right, IR.CallExpression) and not right_type:
-                # Try to infer type from glsl_type attribute first (set by _infer_builtin_function_type)
-                if hasattr(right, 'glsl_type') and right.glsl_type:
-                    right_type = str(right.glsl_type)
-                # Otherwise look up user-defined function in symbol table
-                elif right.function in self.symbol_table.symbols:
-                    func_symbol = self.symbol_table.lookup(right.function)
-                    if func_symbol and hasattr(func_symbol, 'glsl_type'):
-                        right_type = str(func_symbol.glsl_type)
-
-            # Check if right operand is a BinaryOp that doesn't have type set yet
-            # This handles cases like: m2 * (a / b) where (a / b) is a BinaryOp
-            if isinstance(right, IR.BinaryOp) and not right_type:
-                # Try to infer type from the BinaryOp's glsl_type attribute
-                if hasattr(right, 'glsl_type') and right.glsl_type:
-                    right_type = str(right.glsl_type)
-
-            # Check if left operand is a BinaryOp that doesn't have type set yet
-            if isinstance(left, IR.BinaryOp) and not left_type:
-                # Try to infer type from the BinaryOp's glsl_type attribute
-                if hasattr(left, 'glsl_type') and left.glsl_type:
-                    left_type = str(left.glsl_type)
-
-            # Check if this is a matrix operation
-            is_matrix_op = (
-                (self._is_matrix_type(left_type) and self._is_vector_type(right_type)) or
-                (self._is_vector_type(left_type) and self._is_matrix_type(right_type)) or
-                (self._is_matrix_type(left_type) and self._is_matrix_type(right_type))
-            )
-
-            if is_matrix_op:
-                # Infer result type for proper type propagation
-                result_type = self._infer_mul_result_type(left_type, right_type)
-
-                # Get the correctly typed function name based on operand types
-                function_name = self._get_matrix_mul_function_name(left_type, right_type)
-
-                return IR.CallExpression(
-                    function=function_name,
-                    arguments=[left, right],
-                    glsl_type=result_type,
-                    source_location=node.start_point
+            # M * v / v * M / M * M — matrix multiplication (linear algebra).
+            if operator == '*':
+                is_matrix_mul = (
+                    (self._is_matrix_type(left_type) and self._is_vector_type(right_type)) or
+                    (self._is_vector_type(left_type) and self._is_matrix_type(right_type)) or
+                    (self._is_matrix_type(left_type) and self._is_matrix_type(right_type))
                 )
+                if is_matrix_mul:
+                    # Infer result type for proper type propagation
+                    result_type = self._infer_mul_result_type(left_type, right_type)
 
-            # Matrix * Scalar - use native OpenCL, no transformation needed
+                    # Get the correctly typed function name based on operand types
+                    function_name = self._get_matrix_mul_function_name(left_type, right_type)
+
+                    return IR.CallExpression(
+                        function=function_name,
+                        arguments=[left, right],
+                        glsl_type=result_type,
+                        source_location=node.start_point
+                    )
+
+                # Category E fallback: one side is a proven matrix but the
+                # partner is statically untypeable (a #define'd identifier, an
+                # unresolvable call...). GLSL guarantees the partner is a
+                # scalar, matching vector, or matrix — dispatch through the
+                # overloadable GLSL_mul (matrix_ops.h) and let clang overload
+                # resolution pick. A typed-but-non-matrix pair falls through
+                # to native emission unchanged.
+                if ((left_type is None) != (right_type is None)) and \
+                        self._is_matrix_type(left_type or right_type):
+                    return IR.CallExpression(
+                        function='GLSL_mul',
+                        arguments=[left, right],
+                        source_location=node.start_point
+                    )
+
+            # Category H: componentwise matrix arithmetic (M*s, s*M, M/s,
+            # M+/-s, s+/-M, M+/-M, M/M). OpenCL matrix structs reject native
+            # operators; rewrite to a GLSL_matN_* helper.
+            componentwise = self._transform_matrix_componentwise(
+                operator, left, right, left_type, right_type, node)
+            if componentwise is not None:
+                return componentwise
 
         # Infer result type for this binary operation
         result_type = self._infer_binary_op_type(operator, left, right)
+
+        # GLSL aggregate vector comparison (category O): `v1 == v2` yields a
+        # SCALAR bool ("all components equal"), `v1 != v2` "any component
+        # differs". The OpenCL operators yield an int-vector mask instead,
+        # which is invalid wherever a scalar is required (if/ternary/&&/
+        # return/bool init). Wrap at the producer: all(l == r) / any(l != r).
+        # OpenCL's relational -1-for-true sets the MSB that all()/any() test.
+        # Only the OPERATOR spelling is aggregate in GLSL — the lessThan/
+        # equal/... builtins are bvec producers and are lowered elsewhere
+        # (_transform_call_expression), so their masks stay raw.
+        if operator in ('==', '!='):
+            left_type = self._get_type_name(left)
+            right_type = self._get_type_name(right)
+
+            # GLSL matrix == / != is aggregate equality on a struct type in
+            # OpenCL — the operator is rejected outright. Lower to the
+            # overloadable GLSL_mat_eq helper (matrix_ops.h).
+            if self._is_matrix_type(left_type) or self._is_matrix_type(right_type):
+                eq_call = IR.CallExpression(
+                    function='GLSL_mat_eq',
+                    arguments=[left, right],
+                    glsl_type=TYPE_NAME_MAP.get('bool'),
+                    source_location=node.start_point
+                )
+                if operator == '==':
+                    return eq_call
+                return IR.UnaryOp(
+                    operator='!',
+                    operand=eq_call,
+                    source_location=node.start_point
+                )
+
+            if self._is_vector_type(left_type) or self._is_vector_type(right_type):
+                return IR.CallExpression(
+                    function='all' if operator == '==' else 'any',
+                    arguments=[IR.BinaryOp(
+                        operator=operator,
+                        left=left,
+                        right=right,
+                        glsl_type=result_type,
+                        source_location=node.start_point
+                    )],
+                    glsl_type=TYPE_NAME_MAP.get('bool'),
+                    source_location=node.start_point
+                )
 
         # Default: keep binary operation as-is
         return IR.BinaryOp(
@@ -1147,6 +1605,22 @@ class ASTTransformer:
 
         operand = self._transform_node(operand_node)
 
+        # Unary minus on a matrix: OpenCL matrix types are structs, so a raw
+        # -M is rejected ("invalid argument type to unary expression"). GLSL
+        # -M negates every component == componentwise scale by -1.
+        if operator == '-':
+            operand_type = self._resolve_binary_operand_type(
+                operand, self._get_type_name(operand))
+            if self._is_matrix_type(operand_type):
+                glsl_name = MATRIX_NAME_TO_GLSL.get(
+                    _strip_type_qualifiers(operand_type))
+                return IR.CallExpression(
+                    function=f'GLSL_mat{glsl_name[-1]}_muls',
+                    arguments=[operand, IR.FloatLiteral(value='-1.0f')],
+                    glsl_type=TYPE_NAME_MAP.get(glsl_name),
+                    source_location=node.start_point
+                )
+
         return IR.UnaryOp(
             operator=operator,
             operand=operand,
@@ -1165,6 +1639,9 @@ class ASTTransformer:
         """
         function_node = node.function
         function_name = function_node.text if function_node else ""
+        # Category D2 — the callee's original (pre-remap) name, for the Houdini
+        # collision rename applied at the user-call return below.
+        original_function_name = function_name
 
         # Transform arguments
         arguments = []
@@ -1174,6 +1651,42 @@ class ASTTransformer:
                 arguments.append(transformed_arg)
 
         location = node.start_point
+
+        # GLSL array `.length()` method (UNKNOWN sub-cluster): a compile-time
+        # element count with no OpenCL equivalent. The post-process builtin
+        # regex would otherwise turn `arr.length()` into `arr.GLSL_length()`
+        # ("member reference base type '... [N]' is not a structure or union").
+        # Rewrite to the standard C count idiom `(sizeof(arr)/sizeof(arr[0]))`,
+        # a compile-time constant needing no size tracking. Guarded on the exact
+        # shape GLSL's array method takes: a zero-arg call whose callee is a
+        # field access named `length` (the free builtin length(v) has an
+        # identifier callee and is untouched).
+        if (function_node is not None
+                and function_node.type == 'field_expression'
+                and len(arguments) == 0):
+            field_node = function_node.child_by_field_name('field')
+            if field_node is not None and field_node.text == 'length':
+                base_node = function_node.child_by_field_name('argument')
+                if base_node is not None:
+                    base_ir = self._transform_node(base_node)
+                    elem_ir = IR.ArrayAccess(
+                        base=base_ir,
+                        index=IR.IntLiteral(value='0', source_location=location),
+                        source_location=location,
+                    )
+                    return IR.ParenthesizedExpression(
+                        expression=IR.BinaryOp(
+                            operator='/',
+                            left=IR.CallExpression(
+                                function='sizeof', arguments=[base_ir],
+                                source_location=location),
+                            right=IR.CallExpression(
+                                function='sizeof', arguments=[elem_ir],
+                                source_location=location),
+                            source_location=location,
+                        ),
+                        source_location=location,
+                    )
 
         # Category K: GLSL array constructor T[N](...) — parses as a call
         # whose "function" is a subscript expression over the element type
@@ -1206,6 +1719,15 @@ class ASTTransformer:
                 source_location=location
             )
 
+        # HLSL-style type aliases (category J): shaders that `#define float2
+        # vec2` call the constructor by its OpenCL spelling `float2(x, y)`.
+        # tree-sitter parses that as an ordinary identifier (float2 is not a
+        # GLSL type), so it never matched type_map. Normalize the callee to
+        # its GLSL name so the constructor logic below — including the
+        # category-N single-arg conversions — emits `(float2)(x, y)`.
+        if function_name in OPENCL_TO_GLSL_NAME:
+            function_name = OPENCL_TO_GLSL_NAME[function_name]
+
         # Check if it's a type constructor
         if function_name in self.type_map:
             opencl_type = self.type_map[function_name]
@@ -1223,6 +1745,15 @@ class ASTTransformer:
                     function_name, opencl_type, arguments[0], location)
                 if converted is not None:
                     return converted
+
+            # Multi-arg vector ctors: GLSL truncates excess components
+            # (vec3(vec2, vec4) uses the first 3 of the 2+4), but OpenCL's
+            # (float3)(...) literal flattens ALL 6 and clang rejects it
+            # (category AF). Swizzle the boundary-crossing arg down to just
+            # the components still needed. Only fires on genuine overflow.
+            if len(arguments) >= 2 and opencl_type in VECTOR_TYPE_INFO:
+                arguments = self._truncate_overflow_ctor_args(
+                    opencl_type, arguments, location)
 
             # Vector constructors: vec2(...) -> (float2)(...)
             return IR.TypeConstructor(
@@ -1309,18 +1840,22 @@ class ASTTransformer:
             'faceforward', 'reflect', 'refract',
             # Derivative placeholders (dummy implementations)
             'dFdx', 'dFdy', 'fwidth',
-            # Matrix functions (Session 5)
+            # Matrix functions (Session 5; compMult/outerProduct Session 19)
             'transpose', 'inverse', 'determinant',
+            'matrixCompMult', 'outerProduct',
         }
 
         if function_name in glsl_builtins:
             function_name = f'GLSL_{function_name}'
 
         # Add type suffix for mat3/mat4 matrix functions
-        # mat2 uses base name (GLSL_transpose), mat3/mat4 use suffixes
+        # mat2 uses base name (GLSL_transpose), mat3/mat4 use suffixes; an
+        # UNRESOLVED argument type keeps the bare name, which matrix_ops.h
+        # defines as an overloadable dispatcher across all sizes.
+        # (GLSL_outerProduct is overloadable-only — never suffixed.)
         matrix_functions = ['GLSL_transpose', 'GLSL_inverse', 'GLSL_determinant', 'GLSL_matrixCompMult']
         if function_name in matrix_functions and arguments:
-            arg_type = self._get_type_name(arguments[0])
+            arg_type = _strip_type_qualifiers(self._get_type_name(arguments[0]))
             # Handle both GLSL and OpenCL type names
             if arg_type in ['mat3', 'matrix3x3']:
                 function_name = f'{function_name}_mat3'
@@ -1341,8 +1876,13 @@ class ASTTransformer:
             glsl_type = TYPE_NAME_MAP.get(glsl_type_name)
 
         # Handle output parameters (out/inout): the callee wants a pointer.
+        # Select the overload whose arity matches this call so a by-value call
+        # is not pointerised by a same-named out-param overload (and vice versa).
         if function_name in self.function_signatures:
-            param_info = self.function_signatures[function_name]
+            param_info = self.function_signatures[function_name].get(len(arguments))
+        else:
+            param_info = None
+        if param_info is not None:
             for i, (param_name, is_pointer) in enumerate(param_info):
                 if is_pointer and i < len(arguments):
                     arg = arguments[i]
@@ -1352,14 +1892,33 @@ class ASTTransformer:
                             and isinstance(arg.operand, IR.Identifier)
                             and arg.operand.name in self.pointer_params):
                         arguments[i] = arg.operand
-                    # A local variable or array element: take its address.
-                    # (Swizzles/MemberAccess are excluded: &v.xy is invalid.)
-                    elif isinstance(arg, (IR.Identifier, IR.ArrayAccess)):
+                    # A local variable, array element, or struct field: take
+                    # its address. A vector swizzle member (v.xy) is excluded —
+                    # &v.xy is not a valid address — but a struct field (cam.ray)
+                    # is a real lvalue, so &cam.ray is valid and required.
+                    elif (isinstance(arg, (IR.Identifier, IR.ArrayAccess))
+                          or self._is_struct_field_access(arg)):
                         arguments[i] = IR.UnaryOp(
                             operator='&',
                             operand=arg,
                             source_location=arg.source_location
                         )
+                    # A vector swizzle out-arg (`pR(p.xz, ...)` — the hg_sdf
+                    # rotate/mirror idiom): not addressable, so lower to
+                    # copy-in/copy-out via a temp. Only inside an
+                    # expression-statement (where the temp decl + writeback can
+                    # be drained into a wrapping block); elsewhere fall through
+                    # unchanged.
+                    elif self._cico_active and self._is_vector_swizzle(arg):
+                        cico = self._make_swizzle_copy_in_out(arg)
+                        if cico is not None:
+                            arguments[i] = cico
+
+        # Category D2 — a call to a user function whose name collides with a
+        # Houdini builtin is emitted under its `sh_<name>` rename. Keyed by the
+        # ORIGINAL callee name (type inference / signature lookup above used it).
+        if original_function_name in self.function_renames:
+            function_name = self.function_renames[original_function_name]
 
         # Regular function call
         return IR.CallExpression(
@@ -1395,16 +1954,33 @@ class ASTTransformer:
             Appropriate IR node for the matrix constructor
         """
         num_args = len(arguments)
+        cols = {'mat2': 2, 'mat3': 3, 'mat4': 4}[mat_type]
+        total = cols * cols  # GLSL resolves matrix ctors by TOTAL components
 
-        # Diagonal constructor: single scalar argument
         if num_args == 1:
             arg = arguments[0]
-
-            # Check if argument is a matrix (type casting)
             arg_type_name = self._get_type_name(arg)
-            if arg_type_name in ['matrix2x2', 'matrix3x3', 'matrix4x4']:
-                # Matrix type casting: mat4(mat3_var) -> GLSL_mat4_from_mat3(mat3_var)
-                return self._create_matrix_cast(mat_type, arg_type_name, arguments, location)
+
+            # Matrix argument: identity (mat3(m3) is m3) or size cast.
+            # MATRIX_NAME_TO_GLSL accepts both name families — declarations
+            # record 'mat3' in local_types, parameters record 'matrix3x3'.
+            src_glsl = MATRIX_NAME_TO_GLSL.get(arg_type_name)
+            if src_glsl is not None:
+                if src_glsl == mat_type:
+                    return arg
+                return self._create_matrix_cast(mat_type, src_glsl, arguments, location)
+
+            # mat2(vec4): the four components fill the matrix column-major
+            # (the animated-rotation idiom mat2(cos(t+vec4(...)))). Emitting
+            # the diagonal helper here passed a float4 to a float parameter.
+            if arg_type_name in VECTOR_TYPE_INFO:
+                if mat_type == 'mat2' and VECTOR_TYPE_INFO[arg_type_name][1] == 4:
+                    return IR.CallExpression(
+                        function='GLSL_mat2_from_vec4',
+                        arguments=arguments,
+                        glsl_type=TYPE_NAME_MAP.get(mat_type),
+                        source_location=location
+                    )
 
             # Diagonal constructor: mat2(scalar) -> GLSL_matrix2x2_diagonal(scalar)
             function_name = f'GLSL_{opencl_type}_diagonal'
@@ -1417,31 +1993,47 @@ class ASTTransformer:
 
         # Column constructor: mat2(vec2, vec2), mat3(vec3, vec3, vec3), mat4(vec4, vec4, vec4, vec4)
         column_patterns = {
-            'mat2': (2, 'vec2', 'float2'),
-            'mat3': (3, 'vec3', 'float3'),
-            'mat4': (4, 'vec4', 'float4')
+            'mat2': ('vec2', 'float2'),
+            'mat3': ('vec3', 'float3'),
+            'mat4': ('vec4', 'float4')
         }
-
-        if mat_type in column_patterns:
-            expected_cols, vec_type, opencl_vec = column_patterns[mat_type]
-            if num_args == expected_cols:
-                # Check if all arguments are vector types
-                if self._are_all_vector_type(arguments, vec_type, opencl_vec):
-                    function_name = f'GLSL_{mat_type}_cols'
-                    return IR.CallExpression(
-                        function=function_name,
-                        arguments=arguments,
-                        glsl_type=TYPE_NAME_MAP.get(mat_type),
-                        source_location=location
-                    )
-
-        # Full matrix constructor
-        expected_elements = {'mat2': 4, 'mat3': 9, 'mat4': 16}
-        if num_args == expected_elements.get(mat_type, 0):
-            # All matrix types use GLSL_mat* functions
-            function_name = f'GLSL_{mat_type}'
+        vec_type, opencl_vec = column_patterns[mat_type]
+        if num_args == cols and self._are_all_vector_type(arguments, vec_type, opencl_vec):
             return IR.CallExpression(
-                function=function_name,
+                function=f'GLSL_{mat_type}_cols',
+                arguments=arguments,
+                glsl_type=TYPE_NAME_MAP.get(mat_type),
+                source_location=location
+            )
+
+        # Full matrix constructor: one scalar per element
+        if num_args == total:
+            return IR.CallExpression(
+                function=f'GLSL_{mat_type}',
+                arguments=arguments,
+                glsl_type=TYPE_NAME_MAP.get(mat_type),
+                source_location=location
+            )
+
+        # Mixed scalar/vector runs — mat2(a, -a.y, a.x), mat3(v2, s, v4, v2)…
+        # GLSL consumes components in order (column-major), so flatten every
+        # vector argument into its components and emit the flat GLSL_matN ctor.
+        widths = [self._ctor_component_count(a) for a in arguments]
+        if None not in widths and sum(widths) == total:
+            return IR.CallExpression(
+                function=f'GLSL_{mat_type}',
+                arguments=self._flatten_matrix_ctor_args(arguments, widths, location),
+                glsl_type=TYPE_NAME_MAP.get(mat_type),
+                source_location=location
+            )
+
+        # Untypeable arguments with column arity: assume columns. The shader
+        # compiled on Shadertoy, so the ctor was valid GLSL, and N args for
+        # matN is overwhelmingly the column form — this keeps type-inference
+        # gaps (calls, globals) from killing the whole shader at transpile.
+        if num_args == cols:
+            return IR.CallExpression(
+                function=f'GLSL_{mat_type}_cols',
                 arguments=arguments,
                 glsl_type=TYPE_NAME_MAP.get(mat_type),
                 source_location=location
@@ -1453,6 +2045,144 @@ class ASTTransformer:
             location
         )
 
+    def _ctor_component_count(self, node: IR.TransformedNode) -> Optional[int]:
+        """
+        Total scalar components a matrix-constructor argument contributes:
+        1 for scalars/literals, N for vecN, None when unknown (matrices are
+        None too — they are only legal as a sole argument, handled earlier).
+        """
+        if isinstance(node, (IR.FloatLiteral, IR.IntLiteral, IR.BoolLiteral)):
+            return 1
+        type_name = self._get_type_name(node)
+        if type_name is None:
+            return None
+        if type_name in VECTOR_TYPE_INFO:
+            return VECTOR_TYPE_INFO[type_name][1]
+        if self._is_scalar_type(type_name):
+            return 1
+        return None
+
+    def _flatten_matrix_ctor_args(
+        self,
+        arguments: List[IR.TransformedNode],
+        widths: List[int],
+        location: tuple
+    ) -> List[IR.TransformedNode]:
+        """
+        Flatten mixed scalar/vector ctor arguments into a flat component list:
+        [a(vec2), s, t] -> [a.x, a.y, s, t]. Non-postfix expressions get
+        parenthesized so the swizzle binds: (a + b).x. Vector expressions are
+        duplicated per component — fine for the (pure) shader code this serves.
+        """
+        postfix_safe = (IR.Identifier, IR.MemberAccess, IR.ArrayAccess,
+                        IR.CallExpression, IR.ParenthesizedExpression)
+        components = []
+        for arg, width in zip(arguments, widths):
+            if width == 1:
+                components.append(arg)
+                continue
+            base = arg
+            if not isinstance(arg, postfix_safe):
+                base = IR.ParenthesizedExpression(
+                    expression=arg, source_location=location)
+            elem_base = VECTOR_TYPE_INFO[self._get_type_name(arg)][0]
+            elem_type = TYPE_NAME_MAP.get('float' if elem_base == 'bool' else elem_base)
+            for c in 'xyzw'[:width]:
+                components.append(IR.MemberAccess(
+                    base=base,
+                    member=c,
+                    glsl_type=elem_type,
+                    source_location=location
+                ))
+        return components
+
+    def _expr_type_uses_user_fn(self, node: IR.TransformedNode) -> bool:
+        """
+        True if the (vector) type — hence component width — of `node` could be
+        derived from a user-function call, whose return type may be an
+        overload-mismatched over-count (see _truncate_overflow_ctor_args).
+        Walks only the type-DETERMINING sub-expressions: operands of unary /
+        binary / assignment / parenthesized nodes, and the callee/args of a
+        call. A swizzle's width comes from its member string, not its base, so
+        member-access does not need its base inspected here.
+        """
+        if isinstance(node, IR.CallExpression):
+            if node.function in self.user_function_names:
+                return True
+            return any(self._expr_type_uses_user_fn(a) for a in node.arguments)
+        if isinstance(node, IR.ParenthesizedExpression):
+            return self._expr_type_uses_user_fn(node.expression)
+        if isinstance(node, IR.UnaryOp):
+            return self._expr_type_uses_user_fn(node.operand)
+        if isinstance(node, IR.BinaryOp):
+            return (self._expr_type_uses_user_fn(node.left)
+                    or self._expr_type_uses_user_fn(node.right))
+        if isinstance(node, IR.AssignmentOp):
+            return self._expr_type_uses_user_fn(node.target)
+        return False
+
+    def _truncate_overflow_ctor_args(
+        self,
+        opencl_type: str,
+        arguments: List[IR.TransformedNode],
+        location: tuple
+    ) -> List[IR.TransformedNode]:
+        """
+        GLSL vector constructors truncate excess components; OpenCL's literal
+        syntax does not (category AF). When the summed component width of the
+        args EXCEEDS the target vector size, budget the target across the args
+        and swizzle the boundary-crossing arg down to just the components still
+        needed (`vec3(vec2, vec4)` -> `(float3)(v2, v4.x)`), dropping any
+        fully-excess trailing args entirely.
+
+        Only truncates on genuine overflow — an exactly-filled or under-filled
+        ctor is returned unchanged (never pads; under-fill is a legal/different
+        case). If any arg's width can't be inferred, we cannot safely budget,
+        so the whole arg list is left untouched (no guess).
+        """
+        target = VECTOR_TYPE_INFO[opencl_type][1]
+        # A width that traces to a user-function return type is UNTRUSTWORTHY:
+        # user_function_return_types keeps ONE type per name, so an overloaded
+        # fn (`vec2 logc(vec2)` + `vec4 logc(vec4)`) mis-infers width and would
+        # over-count -> we would falsely truncate a legal exactly-filled ctor.
+        # Builtins (texture, etc.) have fixed signatures, so they stay safe.
+        if any(self._expr_type_uses_user_fn(a) for a in arguments):
+            return arguments
+        widths = [self._ctor_component_count(a) for a in arguments]
+        if any(w is None for w in widths):
+            return arguments
+        if sum(widths) <= target:
+            return arguments
+
+        result = []
+        remaining = target
+        postfix_safe = (IR.Identifier, IR.MemberAccess, IR.ArrayAccess,
+                        IR.CallExpression, IR.ParenthesizedExpression)
+        for arg, width in zip(arguments, widths):
+            if remaining <= 0:
+                break  # fully-excess trailing arg: drop it
+            if width <= remaining:
+                result.append(arg)
+                remaining -= width
+                continue
+            # This arg crosses the boundary: swizzle it to `remaining` comps.
+            arg_type = self._get_type_name(arg)
+            base = arg
+            if not isinstance(arg, postfix_safe):
+                base = IR.ParenthesizedExpression(
+                    expression=arg, source_location=location)
+            elem_base = VECTOR_TYPE_INFO[arg_type][0]
+            ocl_base = 'int' if elem_base == 'bool' else elem_base
+            swz_type = ocl_base if remaining == 1 else f'{ocl_base}{remaining}'
+            result.append(IR.MemberAccess(
+                base=base,
+                member='xyzw'[:remaining],
+                glsl_type=swz_type,
+                source_location=location
+            ))
+            remaining = 0
+        return result
+
     def _create_matrix_cast(
         self,
         target_type: str,
@@ -1463,15 +2193,95 @@ class ASTTransformer:
         """
         Create matrix type casting call.
 
-        Examples:
-            mat4(mat3_var) -> GLSL_mat4_from_mat3(mat3_var)
-            mat3(mat4_var) -> GLSL_mat3_from_mat4(mat4_var, &result) [needs special handling]
+        source_type may arrive in either name family ('mat4' from a
+        declaration, 'matrix4x4' from a parameter) — the helper names in
+        matrix_ops.h use the GLSL form: GLSL_mat3_from_mat4(mat4_var).
         """
-        function_name = f'GLSL_{target_type}_from_{source_type}'
+        source_glsl = MATRIX_NAME_TO_GLSL.get(source_type, source_type)
+        function_name = f'GLSL_{target_type}_from_{source_glsl}'
         return IR.CallExpression(
             function=function_name,
             arguments=arguments,
+            glsl_type=TYPE_NAME_MAP.get(target_type),
             source_location=location
+        )
+
+    def _is_struct_field_access(self, node: IR.TransformedNode) -> bool:
+        """True if `node` is a struct-field member access (an addressable
+        lvalue, e.g. `cam.ray` or `hit.pos`), as opposed to a vector swizzle
+        (`v.xy` — not addressable). Used to decide whether an out/inout arg can
+        legally have its address taken (`&cam.ray`). A field is addressable iff
+        the base resolves to a user struct type registered in struct_types."""
+        if not isinstance(node, IR.MemberAccess):
+            return False
+        base_type = self._get_type_name(node.base)
+        if not base_type:
+            return False
+        return _strip_type_qualifiers(base_type) in self.struct_types
+
+    def _is_vector_swizzle(self, node: IR.TransformedNode) -> bool:
+        """True if `node` is a vector swizzle member access (`p.xz`, `v.x`) —
+        NOT an addressable lvalue in OpenCL. The complement of
+        `_is_struct_field_access` over MemberAccess nodes: the base resolves to
+        a vector type rather than a user struct."""
+        if not isinstance(node, IR.MemberAccess):
+            return False
+        base_type = self._get_type_name(node.base)
+        if not base_type:
+            return False
+        base_type = _strip_type_qualifiers(base_type)
+        if base_type in self.struct_types:
+            return False
+        return self._is_vector_type(base_type)
+
+    def _capture_cico(self, transform):
+        """Run `transform()` with the swizzle-out-arg copy-in/copy-out buffers
+        armed; returns (result, prelude, writeback). Buffers are saved/restored
+        so nested statements don't cross-contaminate."""
+        saved = (self._cico_active, self._cico_prelude, self._cico_writeback)
+        self._cico_active = True
+        self._cico_prelude = []
+        self._cico_writeback = []
+        try:
+            result = transform()
+            return result, self._cico_prelude, self._cico_writeback
+        finally:
+            self._cico_active, self._cico_prelude, self._cico_writeback = saved
+
+    def _make_swizzle_copy_in_out(self, arg: IR.MemberAccess):
+        """Lower a vector-swizzle out-arg to copy-in/copy-out. Records a temp
+        declaration (`T _cicoN = p.xz;`) in `_cico_prelude` and a writeback
+        (`p.xz = _cicoN;`) in `_cico_writeback`, and returns `&_cicoN` to
+        replace the argument. Returns None (caller leaves the arg unchanged) if
+        the swizzle type can't be resolved for the temp declaration."""
+        swz_type = self._get_type_name(arg)
+        if not swz_type:
+            return None
+        ocl_type = self.type_map.get(_strip_type_qualifiers(swz_type), swz_type)
+        temp_name = f'_cico{self._cico_counter}'
+        self._cico_counter += 1
+        loc = arg.source_location
+        # copy-in: T _cicoN = <swizzle>;
+        self._cico_prelude.append(IR.Declaration(
+            type_name=ocl_type,
+            name=temp_name,
+            initializer=arg,
+            source_location=loc,
+        ))
+        # copy-out: <swizzle> = _cicoN;  (reusing the same lvalue node)
+        self._cico_writeback.append(IR.ExpressionStatement(
+            expression=IR.AssignmentOp(
+                operator='=',
+                target=arg,
+                value=IR.Identifier(name=temp_name, source_location=loc),
+                source_location=loc,
+            ),
+            source_location=loc,
+        ))
+        return IR.UnaryOp(
+            operator='&',
+            operand=IR.Identifier(name=temp_name, source_location=loc),
+            source_location=loc,
         )
 
     def _transform_field_expression(self, node: ASTNode) -> IR.MemberAccess:
@@ -1497,18 +2307,20 @@ class ASTTransformer:
             field_key = f"{base.name}.{field}"
             field_type = self.local_types.get(field_key)
             if field_type:
-                glsl_type = TYPE_NAME_MAP.get(field_type)
-            else:
-                # Fallback: try to look up struct type in symbol table
-                base_type = self.local_types.get(base.name)
-                if base_type:
-                    # Check if it's a struct type with fields
-                    symbol = self.symbol_table.lookup(base_type)
-                    if symbol and hasattr(symbol, 'metadata'):
-                        fields = symbol.metadata.get('fields', {})
-                        if field in fields:
-                            field_type = fields[field]
-                            glsl_type = TYPE_NAME_MAP.get(field_type)
+                glsl_type = self._glsl_type_from_name(field_type)
+
+        # Struct field type (category E): struct definitions register their
+        # field types in struct_types. Resolve the base type via _get_type_name
+        # so nested members (a.b.c), deref'd pointer params ((*p).f) and
+        # subscripted struct arrays (hits[i].f) all resolve, not just plain
+        # identifiers.
+        if glsl_type is None and field:
+            base_type = self._get_type_name(base)
+            if base_type:
+                struct_fields = self.struct_types.get(
+                    _strip_type_qualifiers(base_type))
+                if struct_fields and field in struct_fields:
+                    glsl_type = self._glsl_type_from_name(struct_fields[field])
 
         # If type not inferred yet, check for vector swizzle operations
         # This enables matrix operations on swizzled vector components
@@ -1518,6 +2330,12 @@ class ASTTransformer:
             if base_type and self._is_vector_type(base_type):
                 # Try to infer swizzle type
                 glsl_type = self._infer_swizzle_type(base_type, field)
+                # OpenCL has no stpq swizzle set: remap p.st -> p.xy. Only
+                # here, where the base is a proven vector AND the pattern
+                # validated as a swizzle — a struct field named s/t/p/q must
+                # pass through untouched.
+                if glsl_type is not None and set(field) <= set('stpq'):
+                    field = field.translate(STPQ_TO_XYZW)
 
         return IR.MemberAccess(
             base=base,
@@ -1540,16 +2358,49 @@ class ASTTransformer:
         base = self._transform_node(base_node)
         index = self._transform_node(index_node) if index_node else None
 
+        # Category F — matrix column subscript. GLSL M[i] returns the i-th
+        # column vector, but the OpenCL matrix types (matrix2x2 etc.) are structs
+        # whose columns live in a `cols[]` array, so M[i] must become M.cols[i]
+        # (its type is the column vector vec2/vec3/vec4). Only applies to a bare
+        # matrix value: an array-of-matrix (arr[i], tracked in array_vars) or a
+        # vector/array subscript falls through unchanged.
+        base_is_array = isinstance(base, IR.Identifier) and base.name in self.array_vars
+        base_type = self._get_type_name(base) if not base_is_array else None
+        if base_type and self._is_matrix_type(base_type):
+            glsl_name = MATRIX_NAME_TO_GLSL.get(base_type, base_type)
+            column_type = {'mat2': 'vec2', 'mat3': 'vec3', 'mat4': 'vec4'}.get(glsl_name)
+            cols = IR.MemberAccess(
+                base=base,
+                member='cols',
+                source_location=node.start_point
+            )
+            return IR.ArrayAccess(
+                base=cols,
+                index=index,
+                glsl_type=TYPE_NAME_MAP.get(column_type) if column_type else None,
+                source_location=node.start_point
+            )
+
         # Try to infer type for matrix operation detection
         glsl_type = None
 
-        # Simple inference: if base is an identifier with an array type,
-        # the element type is the same as the stored type
+        # Element-type inference (category E): for arrays local_types stores
+        # the ELEMENT type under the base name (e.g. 'float3' for vec3[4]), so
+        # arr[i] has exactly the stored type; for a vector, v[i] is a scalar
+        # COMPONENT (typing it as the whole vector would mis-route
+        # v[0] * M into matmul instead of componentwise scale).
         if isinstance(base, IR.Identifier):
-            element_type = self.local_types.get(base.name)
-            if element_type:
-                # For arrays, local_types stores the element type (e.g., "mat2" for mat2[])
-                glsl_type = TYPE_NAME_MAP.get(element_type)
+            stored_type = self.local_types.get(base.name)
+            if stored_type:
+                if base.name in self.array_vars:
+                    glsl_type = self._glsl_type_from_name(stored_type)
+                else:
+                    vec_info = VECTOR_TYPE_INFO.get(
+                        _strip_type_qualifiers(stored_type))
+                    if vec_info:
+                        glsl_type = TYPE_NAME_MAP.get(vec_info[0])
+                    else:
+                        glsl_type = self._glsl_type_from_name(stored_type)
 
         return IR.ArrayAccess(
             base=base,
@@ -1579,10 +2430,17 @@ class ASTTransformer:
         true_expr = self._transform_node(true_node)
         false_expr = self._transform_node(false_node)
 
+        # GLSL requires both branches to share a type; propagate whichever
+        # resolves so a ternary operand ((k ? A : B) * v) keeps matrix/vector
+        # detection alive (category E).
+        branch_type = (self._get_type_name(true_expr)
+                       or self._get_type_name(false_expr))
+
         return IR.TernaryOp(
             condition=condition,
             true_expr=true_expr,
             false_expr=false_expr,
+            glsl_type=self._glsl_type_from_name(branch_type),
             source_location=node.start_point
         )
 
@@ -1625,19 +2483,18 @@ class ASTTransformer:
                 field_key = f"{target.base.name}.{target.member}"
                 self.local_types[field_key] = value_type
 
-        # Handle compound assignment with matrix multiplication
-        if operator == '*=' and value:
-            target_type = self._get_type_name(target)
-            value_type = self._get_type_name(value)
+        # Matrix compound assignment: A op= B -> A = <helper>(A, B). OpenCL's
+        # struct matrix types reject native compound operators.
+        if operator in ('*=', '+=', '-=', '/=') and value is not None:
+            target_type = self._resolve_binary_operand_type(target, self._get_type_name(target))
+            value_type = self._resolve_binary_operand_type(value, self._get_type_name(value))
 
-            # Vector *= Matrix or Matrix *= Matrix
-            if (self._is_vector_type(target_type) and self._is_matrix_type(value_type)) or \
-               (self._is_matrix_type(target_type) and self._is_matrix_type(value_type)) or \
-               (self._is_matrix_type(target_type) and self._is_vector_type(value_type)):
-                # Transform to: target = GLSL_mul_*(target, value)
-                # Get correctly typed function name
+            # *=: matrix/vector multiplication (linear algebra) takes precedence.
+            if operator == '*=' and (
+               (self._is_vector_type(target_type) and self._is_matrix_type(value_type)) or
+               (self._is_matrix_type(target_type) and self._is_matrix_type(value_type)) or
+               (self._is_matrix_type(target_type) and self._is_vector_type(value_type))):
                 function_name = self._get_matrix_mul_function_name(target_type, value_type)
-
                 mul_call = IR.CallExpression(
                     function=function_name,
                     arguments=[target, value],
@@ -1647,6 +2504,36 @@ class ASTTransformer:
                     operator='=',
                     target=target,
                     value=mul_call,
+                    source_location=node.start_point
+                )
+
+            # Componentwise matrix arithmetic: M += M, M -= M, M += s, M /= s...
+            # (category H). Reuse the binary-expression rewrite with the base op.
+            componentwise = self._transform_matrix_componentwise(
+                operator[0], target, value, target_type, value_type, node)
+            if componentwise is not None:
+                return IR.AssignmentOp(
+                    operator='=',
+                    target=target,
+                    value=componentwise,
+                    source_location=node.start_point
+                )
+
+            # Category E fallback for *=: one side is a proven matrix but the
+            # other is statically untypeable — A = GLSL_mul(A, B) and let the
+            # overloadable dispatcher (matrix_ops.h) resolve scalar/vector/
+            # matrix at compile time.
+            if operator == '*=' and \
+                    ((target_type is None) != (value_type is None)) and \
+                    self._is_matrix_type(target_type or value_type):
+                return IR.AssignmentOp(
+                    operator='=',
+                    target=target,
+                    value=IR.CallExpression(
+                        function='GLSL_mul',
+                        arguments=[target, value],
+                        source_location=node.start_point
+                    ),
                     source_location=node.start_point
                 )
 
@@ -1687,11 +2574,32 @@ class ASTTransformer:
         # broadcasts (v++ -> v += 1, v-- -> v -= 1). Scalars keep ++/--.
         # The emitter already renders all ++/-- as prefix, so this introduces no
         # new pre/post-fix semantic change for the common statement form.
-        if self._is_vector_type(self._get_type_name(operand)):
+        operand_type = self._get_type_name(operand)
+        if self._is_vector_type(operand_type):
             return IR.AssignmentOp(
                 operator='+=' if operator == '++' else '-=',
                 target=operand,
                 value=IR.IntLiteral(value='1', source_location=node.start_point),
+                source_location=node.start_point
+            )
+
+        # Matrix ++/-- adds/subtracts 1 from EVERY element (GLSL semantics).
+        # Struct matrix types reject both ++ and the += the vector rewrite
+        # uses, so go straight to the componentwise helper:
+        # M++ -> M = GLSL_matN_adds(M, 1).
+        if self._is_matrix_type(operand_type):
+            glsl_name = MATRIX_NAME_TO_GLSL.get(
+                _strip_type_qualifiers(operand_type))
+            suffix = 'adds' if operator == '++' else 'subs'
+            return IR.AssignmentOp(
+                operator='=',
+                target=operand,
+                value=IR.CallExpression(
+                    function=f'GLSL_mat{glsl_name[-1]}_{suffix}',
+                    arguments=[operand, IR.IntLiteral(value='1')],
+                    glsl_type=TYPE_NAME_MAP.get(glsl_name),
+                    source_location=node.start_point
+                ),
                 source_location=node.start_point
             )
 
@@ -1714,15 +2622,40 @@ class ASTTransformer:
         instead of:
             1.0f * (2.0f / iResolution.y) * (1.0f / fov)  (CORRECT!)
         """
-        # Transform the inner expression
-        if node.named_children:
-            inner = self._transform_node(node.named_children[0])
+        # Transform the inner expression. A comment may sit inside the parens
+        # (e.g. `if ( //note\n cond )`); tree-sitter keeps it as a named child,
+        # so pick the first NON-comment child — otherwise the comment (which
+        # emits nothing) collapses the whole expression to `()` (category AD).
+        inner_nodes = [c for c in node.named_children if c.type != 'comment']
+        if inner_nodes:
+            inner = self._transform_node(inner_nodes[0])
             # Wrap in ParenthesizedExpression to preserve parentheses
             return IR.ParenthesizedExpression(
                 expression=inner,
                 source_location=node.start_point
             )
         return None
+
+    def _transform_comma_expression(self, node: ASTNode) -> IR.TransformedNode:
+        """
+        Transform a comma (sequence) expression `a, b`.
+
+        GLSL/C evaluate each operand and yield the last. tree-sitter nests it
+        right-associatively for 3+ operands (`a, b, c` is
+        comma_expression(a, comma_expression(b, c))), so transforming the two
+        named children recursively reconstructs the whole chain. Without this
+        handler the node fell through to the unknown-type branch and emitted
+        nothing, collapsing an enclosing paren to `()` (category AD).
+        """
+        children = [c for c in node.named_children if c.type != 'comment']
+        if len(children) < 2:
+            # Degenerate/recovered node — fall back to whatever is there.
+            return self._transform_node(children[0]) if children else None
+        return IR.CommaExpression(
+            left=self._transform_node(children[0]),
+            right=self._transform_node(children[-1]),
+            source_location=node.start_point,
+        )
 
     # ========================================================================
     # Statements
@@ -1744,20 +2677,40 @@ class ASTTransformer:
 
         # Check for GLSL 'discard' statement -> transform to 'return;'
         # In GLSL fragment shaders, 'discard' terminates fragment processing
-        # In OpenCL, we use 'return;' to exit the kernel function early
+        # In OpenCL, we use 'return;' to exit the kernel function early.
+        # Inside a value-returning helper (some Shadertoy code puts `discard` in
+        # a non-void function), a bare `return;` is a compile error, so return a
+        # zero-valued default of the function's return type instead.
         if expr_node.type == 'identifier' and expr_node.text == 'discard':
+            ret_type = self.current_function_return_type
+            value = None
+            if ret_type and ret_type != 'void':
+                value = IR.TypeConstructor(
+                    type_name=ret_type,
+                    arguments=[IR.IntLiteral(value="0")],
+                    source_location=node.start_point,
+                )
             return IR.ReturnStatement(
-                value=None,
+                value=value,
                 source_location=node.start_point
             )
 
-        # Transform the expression
-        expr = self._transform_node(expr_node)
+        # Transform the expression, capturing any vector-swizzle out-arg
+        # copy-in/copy-out temps generated during the call transform.
+        expr, prelude, writeback = self._capture_cico(
+            lambda: self._transform_node(expr_node))
 
-        return IR.ExpressionStatement(
+        stmt = IR.ExpressionStatement(
             expression=expr,
-            source_location=node.start_point
+            source_location=node.start_point,
         )
+        if prelude or writeback:
+            # Wrap in a block: { temp decls; call(&temp,…); writebacks; }
+            return IR.CompoundStatement(
+                statements=[*prelude, stmt, *writeback],
+                source_location=node.start_point,
+            )
+        return stmt
 
     def _is_ct_constant(self, node) -> bool:
         """
@@ -1788,6 +2741,21 @@ class ASTTransformer:
         # BinaryOp, CallExpression, Identifier, MemberAccess, ArrayAccess,
         # TernaryOp, ArrayInitializer, ... -> not a program-scope constant.
         return False
+
+    def _unique_shadow_name(self, base_name: str) -> str:
+        """Category AE — pick a rename for a local that shadows a user function.
+
+        `base_name` -> `base_name_v`, disambiguated with a counter if that name
+        is itself a user function, an existing local, or an in-flight rename.
+        """
+        candidate = f"{base_name}_v"
+        i = 2
+        while (candidate in self.user_function_names
+               or candidate in self.local_types
+               or candidate in self.local_renames.values()):
+            candidate = f"{base_name}_v{i}"
+            i += 1
+        return candidate
 
     def _transform_declaration(self, node: ASTNode):
         """
@@ -1825,6 +2793,29 @@ class ASTTransformer:
         glsl_type = glsl_type.replace('highp ', '').replace('mediump ', '').replace('lowp ', '').strip()
         opencl_type = self._transform_type_name(type_node)
 
+        # Category AH — an inline struct DEFINITION carrying a trailing variable:
+        # `struct Name { ... } var;`. Tree-sitter parses this as a declaration
+        # whose `type` is a named struct_specifier with a field list (as opposed
+        # to a bare `struct Name var;` reference). The old path passed the whole
+        # `struct Name {...}` text through as the variable's type_name, emitting a
+        # bare `struct` tag with no typedef — so later bare-name uses (`Name p`)
+        # are invalid C ("must use 'struct' tag to refer to type 'Name'"), and the
+        # struct is never registered for member-access inference. Route the type
+        # through _transform_struct_specifier (emits `typedef struct {...} Name;`
+        # and registers struct_types/type_map), then declare the variable(s) with
+        # the bare struct name. The StructDefinition is returned alongside the
+        # variable declaration and flattened by the caller.
+        struct_def_ir = None
+        if type_node.type == 'struct_specifier':
+            has_fields = any(c.type == 'field_declaration_list'
+                             for c in type_node.named_children)
+            name_child = next((c for c in type_node.named_children
+                               if c.type == 'type_identifier'), None)
+            if has_fields and name_child is not None:
+                struct_def_ir = self._transform_struct_specifier(type_node)
+                glsl_type = struct_def_ir.name
+                opencl_type = struct_def_ir.name
+
         # Collect all declarators (identifiers and init_declarators)
         # Skip type node and punctuation (,;)
         declarators = []
@@ -1833,6 +2824,12 @@ class ASTTransformer:
                 declarators.append(child)
 
         if not declarators:
+            # Function prototype (category S): `float Fn (vec3 p);` parses as a
+            # declaration whose declarator is a function_declarator, not an
+            # identifier. Transform it like a body-less function definition.
+            for child in node.named_children:
+                if child.type == 'function_declarator':
+                    return self._transform_function_prototype(node, child)
             raise TransformationError(
                 "Invalid declaration structure: no declarators found",
                 node.start_point
@@ -1847,11 +2844,13 @@ class ASTTransformer:
             initializer_node = None
 
             # Handle different declarator types
+            is_array = False
             if declarator.type == 'identifier':
                 var_name = declarator.text
                 base_name = var_name
             elif declarator.type == 'array_declarator':
                 # Array declaration: type name[size]
+                is_array = True
                 var_name = declarator.text
                 base_declarator = declarator.child_by_field_name('declarator')
                 if base_declarator:
@@ -1864,6 +2863,7 @@ class ASTTransformer:
                         var_name = name_node.text
                         base_name = var_name
                     elif name_node.type == 'array_declarator':
+                        is_array = True
                         var_name = name_node.text
                         base_declarator = name_node.child_by_field_name('declarator')
                         if base_declarator:
@@ -1879,6 +2879,10 @@ class ASTTransformer:
             # Record variable type in local environment
             if base_name:
                 self.local_types[base_name] = glsl_type
+                # Remember array-ness so a matrix-array subscript (arr[i], an
+                # element access) is not mistaken for a matrix column access.
+                if is_array:
+                    self.array_vars.add(base_name)
 
             # Transform initializer if present, or create zero initializer for undefined variables
             initializer = None
@@ -1917,10 +2921,36 @@ class ASTTransformer:
                         source_location=None
                     )
 
+            # Category AE — a local whose name shadows a user function it CALLS
+            # in its own initializer: `float ao = ao(p);`. In OpenCL the bare
+            # name binds to this value, so the `ao(...)` call fails ("called
+            # object type 'float' is not a function"); GLSL resolves the call to
+            # the function. Rename the LOCAL (and its later reads in this scope)
+            # so the function stays callable; the call keeps the original name
+            # (call callees are not routed through _transform_identifier).
+            #
+            # GATED on the initializer actually calling the shadowed name. That
+            # construct is ALWAYS a compile error today (the declarator's scope
+            # begins before its own initializer), so this can only touch
+            # already-failing shaders — never regress a passing one. A local
+            # that merely shares a function's name without calling it (a legal,
+            # passing shadow, possibly with reads inside a textual #ifdef/#define
+            # block our AST rename can't reach) is left untouched.
+            emit_name = var_name
+            if (not self._global_scope
+                    and not is_array
+                    and base_name in self.user_function_names
+                    and initializer_node is not None
+                    and re.search(r'\b' + re.escape(base_name) + r'\s*\(',
+                                  initializer_node.text)):
+                emit_name = self._unique_shadow_name(base_name)
+                self.local_renames[base_name] = emit_name
+                self.local_types[emit_name] = glsl_type
+
             # Create Declaration node (without type_name for DeclarationList)
             declarations.append(IR.Declaration(
                 type_name=None,  # Will be set at DeclarationList level
-                name=var_name,
+                name=emit_name,
                 initializer=initializer,
                 qualifiers=[],  # Qualifiers will be set at DeclarationList level
                 source_location=declarator.start_point
@@ -1935,7 +2965,7 @@ class ASTTransformer:
         # Return single Declaration or DeclarationList
         if len(declarations) == 1:
             # Single declaration - set type_name on the Declaration
-            return IR.Declaration(
+            decl_node = IR.Declaration(
                 type_name=opencl_type,
                 name=declarations[0].name,
                 initializer=declarations[0].initializer,
@@ -1944,12 +2974,18 @@ class ASTTransformer:
             )
         else:
             # Comma-separated declarations
-            return IR.DeclarationList(
+            decl_node = IR.DeclarationList(
                 type_name=opencl_type,
                 declarators=declarations,
                 qualifiers=qualifiers,
                 source_location=node.start_point
             )
+
+        # Category AH — emit the typedef'd struct definition ahead of the
+        # variable declaration(s). The caller flattens the list into siblings.
+        if struct_def_ir is not None:
+            return [struct_def_ir, decl_node]
+        return decl_node
 
     def _transform_return_statement(self, node: ASTNode) -> IR.ReturnStatement:
         """Transform return statement."""
@@ -2133,9 +3169,28 @@ class ASTTransformer:
         """Transform block statement ({ ... })."""
         statements = []
         for stmt in node.named_children:
-            transformed = self._transform_node(stmt)
-            if transformed is not None:
-                statements.append(transformed)
+            if stmt.type == 'declaration':
+                # A swizzle out-arg inside a declaration INITIALIZER
+                # (`float c = pMod1(p.z, s);`) needs the copy-in/copy-out
+                # lowering too, but the declaration cannot be block-wrapped
+                # (the binding must stay in scope) - splice the temp decl
+                # before it and the writeback after it as siblings.
+                transformed, prelude, writeback = self._capture_cico(
+                    lambda s=stmt: self._transform_node(s))
+                statements.extend(prelude)
+                # Category AH — a local struct-definition-with-variable returns
+                # [StructDefinition, Declaration]; splice both in as siblings.
+                if isinstance(transformed, list):
+                    statements.extend(transformed)
+                elif transformed is not None:
+                    statements.append(transformed)
+                statements.extend(writeback)
+            else:
+                transformed = self._transform_node(stmt)
+                if isinstance(transformed, list):
+                    statements.extend(transformed)
+                elif transformed is not None:
+                    statements.append(transformed)
 
         return IR.CompoundStatement(
             statements=statements,
@@ -2185,6 +3240,20 @@ class ASTTransformer:
                 parameters.append(param)
                 # Add parameter to local type environment for matrix operation detection
                 self.local_types[param.name] = param.type_name
+                # Array params (vec3 pts[4]) index to an element, not a column.
+                if getattr(param, 'array_suffix', None):
+                    self.array_vars.add(param.name)
+
+                # Entry-function params (custom-named golf signatures like
+                # `out vec4 O, vec2 U`) are registered under their GLSL type
+                # names: the pre-single-TU pipeline declared them as GLSL
+                # alias locals (`vec2 U = fragCoord;`), and several inference
+                # paths only recognize GLSL names — OpenCL names here would
+                # silently disable category-N conversions / matrix lowering
+                # inside the entry body.
+                if func_name == self.entry_function:
+                    self.local_types[param.name] = OPENCL_TO_GLSL_NAME.get(
+                        param.type_name, param.type_name)
 
                 # Track pointer parameters (for dereference handling in function
                 # body). The renderpass ENTRY function's out-param (fragColor) is
@@ -2196,14 +3265,24 @@ class ASTTransformer:
                 # Store parameter info for function signature registry
                 param_info.append((param.name, param.is_pointer))
 
-        # Register function signature for call site handling
-        self.function_signatures[func_name] = param_info
+        # Register function signature for call site handling, keyed by arity so
+        # overloads (same name, different parameter count) coexist.
+        self.function_signatures.setdefault(func_name, {})[len(param_info)] = param_info
 
         # Transform body. Declarations inside a function body are local scope,
         # not program scope, so global-init hoisting must not apply to them.
+        # Track the OpenCL return type so a `discard` inside a value-returning
+        # helper can lower to a zero-valued return instead of a bare `return;`
+        # (which is a compile error in a non-void function).
         prev_global_scope = self._global_scope
+        prev_return_type = self.current_function_return_type
+        prev_local_renames = self.local_renames  # Category AE — per-body scope
+        self.local_renames = {}
         self._global_scope = False
+        self.current_function_return_type = return_type
         body = self._transform_node(body_node)
+        self.local_renames = prev_local_renames
+        self.current_function_return_type = prev_return_type
         self._global_scope = prev_global_scope
 
         # Clear pointer params after transformation
@@ -2218,12 +3297,129 @@ class ASTTransformer:
         entry_points = {'mainImage', 'mainCubemap', 'mainSound', 'mainVR'}
         overloadable = func_name not in entry_points
 
+        # Category Q — gl_FragCoord builtin used directly in the entry body.
+        # gl_FragCoord is a fragment-shader builtin whose .xy is the pixel-center
+        # coordinate: exactly `fragCoord`, the value the entry already receives.
+        # OpenCL has no such builtin, so referencing it fails with "undeclared
+        # identifier 'gl_FragCoord'". Inject a body-local derived from fragCoord
+        # (the exact Shadertoy value; z/w take nominal fragment values). fragCoord
+        # is always in scope at the top of the emitted entry body (the host's
+        # SHADERTOY_INPUTS provides it). Only the ENTRY body is covered — a helper
+        # that reads gl_FragCoord would need the coordinate threaded through its
+        # parameters (a larger redesign); those remain deliberately unfixed.
+        if (func_name == self.entry_function
+                and not self._gl_fragcoord_user_provided
+                and re.search(r'\bgl_FragCoord\b', body_node.text)
+                and isinstance(body, IR.CompoundStatement)):
+            gl_fragcoord_decl = IR.Declaration(
+                type_name="float4",
+                name="gl_FragCoord",
+                initializer=IR.TypeConstructor(
+                    type_name="float4",
+                    arguments=[
+                        IR.Identifier(name="fragCoord"),
+                        IR.FloatLiteral(value="0.0f"),
+                        IR.FloatLiteral(value="1.0f"),
+                    ],
+                ),
+            )
+            body = IR.CompoundStatement(
+                statements=[gl_fragcoord_decl] + list(body.statements or []),
+                source_location=body.source_location,
+            )
+
         return IR.FunctionDefinition(
             return_type=return_type,
-            name=func_name,
+            # Category D2 — emit `sh_<name>` when the name collides with a
+            # Houdini builtin (tracking dicts stay keyed by the original name).
+            name=self.function_renames.get(func_name, func_name),
             parameters=parameters,
             body=body,
             overloadable=overloadable,
+            source_location=node.start_point
+        )
+
+    def _transform_function_prototype(self, node: ASTNode,
+                                      declarator: ASTNode) -> IR.FunctionDefinition:
+        """
+        Transform a function prototype / forward declaration (category S).
+
+        GLSL: `float PrSphDf (vec3 p, float r);` parses as a `declaration`
+        whose declarator is a `function_declarator`. Emit it as a body-less
+        OpenCL prototype with the SAME parameter transformation and
+        `__attribute__((overloadable))` marking as the eventual definition —
+        OpenCL rejects an overloadable definition whose earlier declaration
+        is not marked.
+
+        The prototype also pre-registers the function's return type and
+        out-param signature so call sites that appear before the definition
+        (the reason prototypes exist) get correct type inference and
+        `&` insertion.
+        """
+        type_node = node.child_by_field_name('type')
+        return_type = self._transform_type_name(type_node)
+
+        # Function name: identifier child of the function_declarator
+        func_name = ""
+        for child in declarator.children:
+            if child.type == 'identifier':
+                func_name = child.text
+                break
+        if not func_name:
+            raise TransformationError(
+                "Invalid function prototype: missing name",
+                node.start_point
+            )
+
+        # Register return type (GLSL name) for call-before-definition inference
+        self.user_function_return_types[func_name] = type_node.text.strip()
+
+        # Transform parameters exactly like a definition, but without touching
+        # local_types/pointer_params (there is no body to scope them to).
+        parameters = []
+        param_info = []
+        for child in declarator.children:
+            if child.type != 'parameter_list':
+                continue
+            for param_node in child.named_children:
+                if param_node.type != 'parameter_declaration':
+                    continue
+                param = self._transform_parameter(param_node)
+                if param is None:
+                    # Unnamed prototype param (`float Fn(vec3);`) — keep the
+                    # arity: emit the type alone.
+                    param_type_node = param_node.child_by_field_name('type')
+                    if param_type_node is None:
+                        continue
+                    param = IR.Parameter(
+                        type_name=self._transform_type_name(param_type_node),
+                        name="",
+                        qualifiers=[],
+                        is_pointer=False,
+                        source_location=param_node.start_point
+                    )
+                parameters.append(param)
+                param_info.append((param.name, param.is_pointer))
+
+        # Pre-register the signature for `&` insertion at call sites that
+        # precede the definition (the definition re-registers identically).
+        # Keyed by arity so overloads coexist.
+        self.function_signatures.setdefault(func_name, {})[len(param_info)] = param_info
+
+        # Same entry-point exclusion as _transform_function_definition: hosts
+        # strip/replace the entry signature, so it must stay unmarked.
+        entry_points = {'mainImage', 'mainCubemap', 'mainSound', 'mainVR'}
+        overloadable = func_name not in entry_points
+
+        return IR.FunctionDefinition(
+            return_type=return_type,
+            # Category D2 — mirror the definition's `sh_<name>` rename so the
+            # prototype and definition keep identical signatures.
+            name=self.function_renames.get(func_name, func_name),
+            parameters=parameters,
+            body=None,
+            overloadable=overloadable,
+            is_prototype=True,
             source_location=node.start_point
         )
 
@@ -2284,10 +3480,15 @@ class ASTTransformer:
         is_output_param = 'out' in glsl_qualifiers or 'inout' in glsl_qualifiers
 
         if is_output_param and array_suffix is None:
-            # Output parameters use __private address space
-            opencl_qualifiers.append('__private')
-
-            # All output parameters need explicit pointers
+            # Output parameters become pointers, emitted WITHOUT an explicit
+            # address-space qualifier (a bare `float4* p`). An explicit
+            # `__private` rejects a `__global` argument — and category-A leaves
+            # compile-time-constant-init globals at program scope, where OpenCL
+            # places them in `__global`, so `save(&gState)` passes a
+            # `__global float4*` to the param. A bare pointer acts as the
+            # generic address space in the campaign/Houdini build mode (no
+            # -cl-std), accepting both `__global` (hoisted globals) and
+            # `__private` (locals) arguments; probe-verified on the CUDA target.
             is_pointer = True
 
         # Keep const qualifier if present (unless the mapped type already

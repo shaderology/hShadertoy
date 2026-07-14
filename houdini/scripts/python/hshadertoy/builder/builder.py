@@ -73,6 +73,27 @@ def _load_assets_mapping() -> Dict[int, Dict[str, Any]]:
     return {item["id"]: item for item in data["inputs"]}
 
 
+def _resolve_renderpass_name(renderpass: Dict[str, Any]) -> str:
+    """
+    Canonical renderpass name, deriving it from `type` when `name` is empty.
+
+    Old (pre-~2016) Shadertoy API shaders return name="" (e.g. 4l2XWw
+    "phyllotaxis 2D"); skipping those passes silently built a DEFAULT-state
+    HDA. Type is unambiguous for image/common/cubemap/sound. A nameless
+    BUFFER pass stays "" (A-D cannot be told apart from type alone; never
+    seen in the 999-shader corpus) - the caller must warn, not silently skip.
+    """
+    name = renderpass.get("name")
+    if name:
+        return name
+    return {
+        "image": "Image",
+        "common": "Common",
+        "cubemap": "Cube A",
+        "sound": "Sound",
+    }.get(renderpass.get("type", ""), "")
+
+
 def _get_renderpass_token(renderpass_name: str) -> int | str:
     """
     Convert renderpass name to token.
@@ -178,12 +199,25 @@ def _build_renderpass_params(
         # Set folder and asset parameters
         # Common uses different naming (no "rp" prefix)
         if rp_token == "common":
-            params[f"folder_{rp_token}_ch{channel}"] = folder_token
-            params[f"asset{folder_token}_{rp_token}_ch{channel}"] = asset_token
+            prefix = f"{rp_token}_ch{channel}"
         else:
-            params[f"folder_rp{rp_token}_ch{channel}"] = folder_token
-            # Yes, the folder token goes in the parameter name. Don't ask why.
-            params[f"asset{folder_token}_rp{rp_token}_ch{channel}"] = asset_token
+            prefix = f"rp{rp_token}_ch{channel}"
+        params[f"folder_{prefix}"] = folder_token
+        # Yes, the folder token goes in the parameter name. Don't ask why.
+        params[f"asset{folder_token}_{prefix}"] = asset_token
+
+        # Forward the Shadertoy sampler settings to the HDA channel parms.
+        # Missing keys fall back to the site defaults (mipmap/repeat/vflip on).
+        # HDA menu tokens: wrap Clamp='1' Wrap='3'; filter 0/1/2 = nearest/
+        # linear/mipmap; the vflip toggle already matches site semantics
+        # (the iChannel HDA inverts internally for Houdini's row order).
+        sampler = input_data.get("sampler", {})
+        params[f"vflip_{prefix}"] = \
+            str(sampler.get("vflip", "true")).lower() != "false"
+        params[f"wrap_{prefix}"] = \
+            "1" if sampler.get("wrap") == "clamp" else "3"
+        params[f"filter_{prefix}"] = \
+            {"nearest": 0, "linear": 1}.get(sampler.get("filter"), 2)
 
     return params
 
@@ -307,8 +341,10 @@ def build_shadertoy_hda(
     all_params = {}
 
     for renderpass in renderpasses:
-        rp_name = renderpass.get("name")
+        rp_name = _resolve_renderpass_name(renderpass)
         if not rp_name:
+            print(f"Warning: skipping renderpass with no name and "
+                  f"unresolvable type {renderpass.get('type')!r}")
             continue
 
         try:

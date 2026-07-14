@@ -113,9 +113,15 @@ def load_build_options(json_file):
 
 
 def load_file_or_empty(filepath, description):
-    """Load file content or return empty string with warning."""
+    """Load file content or return empty string with warning.
+
+    Transpiled .cl artifacts are written as UTF-8 (campaign.py /
+    transpile.py) and may contain non-ASCII shader comments — the
+    transpiler preserves file-scope license/attribution blocks — so the
+    read must not use the Windows default codec (cp1252 crashed on them).
+    """
     if filepath and os.path.isfile(filepath):
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
             return f.read()
     elif filepath:
         print(f"Warning: {description} file '{filepath}' not found, skipping.")

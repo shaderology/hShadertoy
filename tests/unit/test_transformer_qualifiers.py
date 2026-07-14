@@ -9,7 +9,7 @@ Tests:
 
 Architecture:
     GLSL: void func(out float x)
-    OpenCL: void func(__private float* x)
+    OpenCL: void func(float* x)
 
     GLSL: out_param = value;
     OpenCL: *out_param = value;
@@ -73,25 +73,25 @@ def test_in_qualifier_removed(parser, transformer, emitter):
 
 
 def test_out_scalar_to_pointer(parser, transformer, emitter):
-    """Test out float x -> __private float* x."""
+    """Test out float x -> float* x."""
     glsl = """
     void test(out float x) {
         x = 1.0;
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float* x' in opencl or '__private float *x' in opencl
+    assert 'float* x' in opencl or 'float *x' in opencl
 
 
 def test_inout_scalar_to_pointer(parser, transformer, emitter):
-    """Test inout float x -> __private float* x."""
+    """Test inout float x -> float* x."""
     glsl = """
     void test(inout float x) {
         x = x * 2.0;
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float* x' in opencl or '__private float *x' in opencl
+    assert 'float* x' in opencl or 'float *x' in opencl
 
 
 def test_const_qualifier_preserved(parser, transformer, emitter):
@@ -118,51 +118,51 @@ def test_no_qualifier_default(parser, transformer, emitter):
 
 
 def test_out_vec2_to_pointer(parser, transformer, emitter):
-    """Test out vec2 v -> __private float2* v."""
+    """Test out vec2 v -> float2* v."""
     glsl = """
     void test(out vec2 v) {
         v = vec2(1.0, 2.0);
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float2* v' in opencl or '__private float2 *v' in opencl
+    assert 'float2* v' in opencl or 'float2 *v' in opencl
 
 
 def test_out_vec3_to_pointer(parser, transformer, emitter):
-    """Test out vec3 v -> __private float3* v."""
+    """Test out vec3 v -> float3* v."""
     glsl = """
     void test(out vec3 v) {
         v = vec3(1.0, 2.0, 3.0);
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float3* v' in opencl or '__private float3 *v' in opencl
+    assert 'float3* v' in opencl or 'float3 *v' in opencl
 
 
 def test_out_vec4_to_pointer(parser, transformer, emitter):
-    """Test out vec4 v -> __private float4* v."""
+    """Test out vec4 v -> float4* v."""
     glsl = """
     void test(out vec4 v) {
         v = vec4(1.0, 2.0, 3.0, 4.0);
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float4* v' in opencl or '__private float4 *v' in opencl
+    assert 'float4* v' in opencl or 'float4 *v' in opencl
 
 
 def test_out_mat2_to_pointer(parser, transformer, emitter):
-    """Test out mat2 M -> __private matrix2x2* M."""
+    """Test out mat2 M -> matrix2x2* M."""
     glsl = """
     void test(out mat2 M) {
         M = mat2(1.0);
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private matrix2x2* M' in opencl or '__private matrix2x2 *M' in opencl
+    assert 'matrix2x2* M' in opencl or 'matrix2x2 *M' in opencl
 
 
 def test_out_mat3_no_pointer(parser, transformer, emitter):
-    """Test out mat3 M -> __private matrix3x3* M (struct type uses pointer like mat2/mat4)."""
+    """Test out mat3 M -> matrix3x3* M (struct type uses pointer like mat2/mat4)."""
     glsl = """
     void test(out mat3 M) {
         M = mat3(1.0);
@@ -170,33 +170,33 @@ def test_out_mat3_no_pointer(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # mat3 now uses struct type, so it uses pointers like mat2/mat4
-    assert '__private matrix3x3* M' in opencl or '__private matrix3x3 *M' in opencl
+    assert 'matrix3x3* M' in opencl or 'matrix3x3 *M' in opencl
 
 
 def test_out_mat4_to_pointer(parser, transformer, emitter):
-    """Test out mat4 M -> __private matrix4x4* M."""
+    """Test out mat4 M -> matrix4x4* M."""
     glsl = """
     void test(out mat4 M) {
         M = mat4(1.0);
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private matrix4x4* M' in opencl or '__private matrix4x4 *M' in opencl
+    assert 'matrix4x4* M' in opencl or 'matrix4x4 *M' in opencl
 
 
 def test_inout_vec2_to_pointer(parser, transformer, emitter):
-    """Test inout vec2 v -> __private float2* v."""
+    """Test inout vec2 v -> float2* v."""
     glsl = """
     void test(inout vec2 v) {
         v = v * 2.0;
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private float2* v' in opencl or '__private float2 *v' in opencl
+    assert 'float2* v' in opencl or 'float2 *v' in opencl
 
 
 def test_inout_mat3_no_pointer(parser, transformer, emitter):
-    """Test inout mat3 M -> __private matrix3x3* M (struct type uses pointer)."""
+    """Test inout mat3 M -> matrix3x3* M (struct type uses pointer)."""
     glsl = """
     void test(inout mat3 M) {
         M = mat3(1.0);
@@ -204,7 +204,7 @@ def test_inout_mat3_no_pointer(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # mat3 now uses struct type, so it uses pointers like mat2/mat4
-    assert '__private matrix3x3* M' in opencl or '__private matrix3x3 *M' in opencl
+    assert 'matrix3x3* M' in opencl or 'matrix3x3 *M' in opencl
 
 
 def test_multiple_parameters_mixed(parser, transformer, emitter):
@@ -218,8 +218,8 @@ def test_multiple_parameters_mixed(parser, transformer, emitter):
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # in removed, out/inout become pointers, const may be removed
     assert 'float a' in opencl
-    assert '__private float* b' in opencl or '__private float *b' in opencl
-    assert '__private float* c' in opencl or '__private float *c' in opencl
+    assert 'float* b' in opencl or 'float *b' in opencl
+    assert 'float* c' in opencl or 'float *c' in opencl
     assert 'float d' in opencl
 
 
@@ -233,8 +233,8 @@ def test_pointer_params_tracking(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # Both x and y should be pointers
-    assert '__private float* x' in opencl or '__private float *x' in opencl
-    assert '__private float2* y' in opencl or '__private float2 *y' in opencl
+    assert 'float* x' in opencl or 'float *x' in opencl
+    assert 'float2* y' in opencl or 'float2 *y' in opencl
     # Assignments should have dereferences
     assert '*x = 1.0f' in opencl
     assert '*y = (float2)' in opencl
@@ -381,15 +381,20 @@ def test_is_pointer_flag_false_mat3(parser, transformer, emitter):
     assert 'matrix3x3* M' in opencl or 'matrix3x3 *M' in opencl
 
 
-def test_private_qualifier_added(parser, transformer, emitter):
-    """Verify __private qualifier is added for out parameters."""
+def test_no_private_qualifier_on_outparam(parser, transformer, emitter):
+    """Out/inout pointer params are emitted WITHOUT an explicit `__private`
+    address-space qualifier (Session 37): a bare `float* x` acts as the generic
+    address space in the campaign/Houdini build mode, so a `__global` argument
+    (a program-scope global passed by address) is accepted, whereas an explicit
+    `__private float*` rejects it."""
     glsl = """
     void test(out float x) {
         x = 1.0;
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    assert '__private' in opencl
+    assert '__private' not in opencl
+    assert 'float* x' in opencl or 'float *x' in opencl
 
 
 def test_emit_parameter_pointer(parser, transformer, emitter):
@@ -402,10 +407,10 @@ def test_emit_parameter_pointer(parser, transformer, emitter):
     }
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
-    # All should have __private and pointer syntax
-    assert '__private float* x' in opencl or '__private float *x' in opencl
-    assert '__private float3* v' in opencl or '__private float3 *v' in opencl
-    assert '__private matrix2x2* M' in opencl or '__private matrix2x2 *M' in opencl
+    # All should have and pointer syntax
+    assert 'float* x' in opencl or 'float *x' in opencl
+    assert 'float3* v' in opencl or 'float3 *v' in opencl
+    assert 'matrix2x2* M' in opencl or 'matrix2x2 *M' in opencl
 
 
 def test_function_signature_registry(parser, transformer, emitter):
@@ -421,7 +426,7 @@ def test_function_signature_registry(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # Function should have pointer parameter
-    assert 'void helper(__private float* x)' in opencl or 'void helper(__private float *x)' in opencl
+    assert 'void helper(float* x)' in opencl or 'void helper(float *x)' in opencl
     # Call site should have address-of
     assert 'helper(&y)' in opencl
 
@@ -850,7 +855,7 @@ def test_mainimage_special_handling(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # mainImage parameters should still be pointers in signature
-    assert '__private float4* fragColor' in opencl or '__private float4 *fragColor' in opencl
+    assert 'float4* fragColor' in opencl or 'float4 *fragColor' in opencl
     # But dereference might be handled by transpile.py post-processing
     # For now, just check that the function compiles
 
@@ -870,7 +875,7 @@ def test_realistic_shader_pattern(parser, transformer, emitter):
     """
     opencl = transform_and_emit(glsl, parser, transformer, emitter)
     # random2 should have pointer parameter
-    assert '__private float2* noise2' in opencl or '__private float2 *noise2' in opencl
+    assert 'float2* noise2' in opencl or 'float2 *noise2' in opencl
     # Assignment should have dereference
     assert '*noise2 = (float2)' in opencl
     # Call site should have address-of

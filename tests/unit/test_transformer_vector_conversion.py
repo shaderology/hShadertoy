@@ -204,3 +204,89 @@ def test_widening_left_alone(parser, transformer, emitter):
     out = t(_fn("vec4 v = vec4(uv); return v;"),
             parser, transformer, emitter)
     assert 'convert_float4' not in out
+
+
+# ---- vector-vector conversion through a bitwise op (Session 21) -------------
+# The arg's type must be inferred through &/|/^/<<>> for the ctor to convert.
+# `iuv & 7` (int-vector mask / quantize idiom) was un-typed, so vec2(iuv & 7)
+# fell back to the invalid (float2)(int2_expr) cast.
+
+def test_vec_from_bitwise_and_vector(parser, transformer, emitter):
+    """vec3(ip3 & 7): & result infers ivec3, so the ctor converts not casts."""
+    out = t(_fn("vec3 v = vec3(ip3 & 7); return vec4(v, 1.0);"),
+            parser, transformer, emitter)
+    assert 'convert_float3(ip3 & 7)' in out
+    assert '(float3)(ip3 &' not in out
+
+
+def test_vec_from_shift_vector(parser, transformer, emitter):
+    """vec2(up2 >> 2u): shift result takes the left (uvec2) type."""
+    out = t(_fn("vec2 v = vec2(up2 >> 2u); return vec4(v, 0.0, 1.0);"),
+            parser, transformer, emitter)
+    assert 'convert_float2(up2 >> 2u)' in out
+    assert '(float2)(up2 >>' not in out
+
+
+# ---- scalar-from-vector ctor: GLSL float(vecN) takes .x (Session 21) --------
+# Same ctor site, scalar target. OpenCL rejects (float)(float3_expr); GLSL
+# float(v)==v.x, int(v)==int(v.x). ~6 corpus shaders (hash-to-float idioms).
+
+def test_float_from_vec3(parser, transformer, emitter):
+    """float(vec3) -> vec3.x (base matches: no cast needed)."""
+    out = t(_fn("float x = float(p3); return vec4(x);"),
+            parser, transformer, emitter)
+    assert 'p3.x' in out
+    assert '(float)(p3)' not in out
+
+
+def test_int_from_vec3(parser, transformer, emitter):
+    """int(vec3): take .x then a scalar cast (element base differs)."""
+    out = t(_fn("int i = int(p3); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert '(int)(p3.x)' in out
+    assert '(int)(p3)' not in out
+
+
+def test_float_from_uvec_expr(parser, transformer, emitter):
+    """float(uvec2 & mask): .x of a parenthesized expr, then scalar cast."""
+    out = t(_fn("float x = float(up2 & 3u); return vec4(x);"),
+            parser, transformer, emitter)
+    assert '(float)((up2 & 3u).x)' in out
+
+
+def test_float_from_scalar_unchanged(parser, transformer, emitter):
+    """float(intVar) is a normal scalar cast — must NOT grow a .x."""
+    out = t(_fn("int n = 3; float x = float(n); return vec4(x);"),
+            parser, transformer, emitter)
+    assert '(float)(n)' in out
+    assert 'n.x' not in out
+
+
+# ---- Session 30: type-inference gaps that fell back to the invalid C cast ---
+
+def test_ivec2_from_round_call(parser, transformer, emitter):
+    """ivec2(round(uv)): `round` maps to the native OpenCL `round` (no GLSL_
+    prefix), so its vector return type must still be inferred for the
+    conversion to fire. Xs3fRB."""
+    out = t(_fn("ivec2 g = ivec2(round(uv)); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_int2(round(uv))' in out
+    assert '(int2)(round' not in out
+
+
+def test_ivec2_from_assignment_expr(parser, transformer, emitter):
+    """ivec2(o /= .7): an assignment expression carries its target's (vector)
+    type. 4dSfWD."""
+    out = t(_fn("vec2 o = uv; ivec2 g = ivec2(o /= 0.7); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_int2(' in out
+    assert '(int2)(o' not in out
+
+
+def test_ivec3_from_step_scalar_vector(parser, transformer, emitter):
+    """ivec3(step(0.25, p3)): step()'s result type is the WIDEST arg (the
+    vector), not arg[0] (a scalar). 4ljyRc."""
+    out = t(_fn("ivec3 m = ivec3(step(0.25, p3)); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_int3(GLSL_step(0.25f, p3))' in out
+    assert '(int3)(GLSL_step' not in out

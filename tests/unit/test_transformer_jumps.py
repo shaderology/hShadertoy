@@ -281,6 +281,41 @@ def test_discard_with_return(parser, transformer, emitter):
     assert 'discard;' not in opencl
 
 
+def test_discard_in_value_returning_function(parser, transformer, emitter):
+    """discard inside a non-void function must return a value, not `return;`.
+
+    A bare `return;` in a value-returning OpenCL function is a compile error
+    ("non-void function should return a value"). Some Shadertoy helpers use
+    `discard` inside a value-returning helper; lower it to a zero-valued return
+    of the function's return type. (Shader MdVfWG — value-returning `sphere`.)
+    """
+    glsl = """
+    vec2 sphere(vec3 ro, vec3 rd) {
+        float h = dot(rd, rd);
+        if (h < 0.0)
+            discard;
+        return vec2(-h, h);
+    }
+    """
+    opencl = transform_and_emit(glsl, parser, transformer, emitter)
+    assert 'discard;' not in opencl
+    # Must not leave a bare `return;` inside the non-void function.
+    assert 'return;' not in opencl
+    assert 'return (float2)(0)' in opencl
+
+
+def test_discard_in_void_function_stays_bare_return(parser, transformer, emitter):
+    """discard in a void function still lowers to a bare `return;`."""
+    glsl = """
+    void test(vec2 uv) {
+        if (uv.x > 0.9) discard;
+    }
+    """
+    opencl = transform_and_emit(glsl, parser, transformer, emitter)
+    assert 'return;' in opencl
+    assert 'discard;' not in opencl
+
+
 # ============================================================================
 # 5. Nested and Combined Cases
 # ============================================================================
