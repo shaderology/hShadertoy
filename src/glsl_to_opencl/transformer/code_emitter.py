@@ -70,6 +70,21 @@ class CodeEmitter:
             f"No emit method for {node.__class__.__name__}"
         )
 
+    def emit_PreprocessorDirective(self, node) -> str:
+        """Emit a raw preprocessor directive (mirror of opencl_emitter)."""
+        return f"{node.text}\n"
+
+    def emit_PreprocessorBlock(self, node) -> str:
+        """Emit an AST-routed #if/#ifdef block (Session 53, category E) —
+        mirror of opencl_emitter.emit_PreprocessorBlock."""
+        result = ""
+        for directive_line, statements in (node.segments or []):
+            result += f"{directive_line}\n"
+            for stmt in statements:
+                result += self.emit(stmt)
+        result += "#endif\n"
+        return result
+
     def indent(self) -> str:
         """Get current indentation string."""
         return ' ' * (self.indent_level * self.indent_size)
@@ -187,6 +202,11 @@ class CodeEmitter:
         if isinstance(node, IR.ArrayConstructor) or self._is_struct_ctor(node):
             return self._braced_args(node.arguments)
         return self.emit(node)
+
+    def emit_initializer(self, node) -> str:
+        """Public wrapper over _emit_initializer (mirrors OpenCLEmitter) for
+        hosts rendering a declaration-position initializer directly."""
+        return self._emit_initializer(node)
 
     def emit_ArrayConstructor(self, node: IR.ArrayConstructor) -> str:
         """

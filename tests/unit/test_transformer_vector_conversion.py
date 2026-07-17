@@ -290,3 +290,45 @@ def test_ivec3_from_step_scalar_vector(parser, transformer, emitter):
             parser, transformer, emitter)
     assert 'convert_int3(GLSL_step(0.25f, p3))' in out
     assert '(int3)(GLSL_step' not in out
+
+
+# ---- Session 50: binary op with a statically untypeable operand -------------
+# An object-like macro (`#define scale 20.`) survives as a bare identifier
+# (object macros are not inlined), so `vec / scale` had ONE typed operand and
+# _infer_binary_op_type bailed -> the ctor arg lost its type -> invalid
+# `(int2)(float2)` C cast. Vector-op-unknown now infers the vector type.
+
+def test_ivec2_from_vec_div_macro_constant(parser, transformer, emitter):
+    """ivec2(uv / scale) with `scale` an untypeable object-macro identifier.
+    ts3GzX, ltScRm."""
+    out = t(_fn("ivec2 pos = ivec2(uv / scale); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_int2(uv / scale)' in out
+    assert '(int2)(uv' not in out
+
+
+def test_ivec2_from_macro_mul_vec(parser, transformer, emitter):
+    """Untypeable operand on the LEFT: ivec2(scale * uv)."""
+    out = t(_fn("ivec2 pos = ivec2(scale * uv); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_int2(scale * uv)' in out
+    assert '(int2)(scale' not in out
+
+
+def test_vec2_from_ivec_minus_macro(parser, transformer, emitter):
+    """Base change the other way: vec2(ip3.xy - K) with K untypeable.
+    The inner vec2 arg is an int vector minus an unknown -> stays int2 -> the
+    float2 ctor must convert."""
+    out = t(_fn("ivec2 iv = ivec2(0); vec2 p = vec2(iv - K); return vec4(0.0);"),
+            parser, transformer, emitter)
+    assert 'convert_float2(iv - K)' in out
+    assert '(float2)(iv' not in out
+
+
+def test_matrix_times_unknown_stays_uninferred(parser, transformer, emitter):
+    """Guard: a MATRIX operand with an unknown partner must NOT be inferred as
+    a vector — `mat * unknown` is ambiguous (matrix or vector). vec2(m2 * K)
+    keeps the plain cast rather than wrongly emitting convert_int2."""
+    out = t("vec4 f(mat2 m2) { ivec2 q = ivec2(m2 * K); return vec4(0.0); }",
+            parser, transformer, emitter)
+    assert 'convert_int2' not in out

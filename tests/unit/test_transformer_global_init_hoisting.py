@@ -146,3 +146,218 @@ def test_hoist_order_preserved():
     assert 'float3 a;' in header
     assert 'float3 b;' in header
     assert kernel.index('a = GLSL_normalize(') < kernel.index('b =')
+
+
+# ============================================================================
+# 4. A3 — uninitialized matrix globals (synthesized zero-init is a CALL)
+# ============================================================================
+# An uninitialized global's zero value is synthesized to match GLSL semantics.
+# For scalars/vectors that is a literal (compile-time constant → stays), but for
+# a matrix it is `GLSL_matrixNxN_diagonal(0.0f)` — a function CALL, which is
+# NOT a compile-time constant at program scope. It must be hoisted like an
+# explicit non-const initializer, not emitted as a file-scope initializer.
+
+def test_uninitialized_matrix_global_hoisted():
+    """mat3 obj;  -> bare `matrix3x3 obj;` + hoisted diagonal-zero assignment."""
+    header, kernel = tp("mat3 obj;\n" + MAIN)
+    assert 'matrix3x3 obj;' in header
+    # No diagonal-constructor CALL at file scope.
+    assert 'obj = GLSL_matrix3x3_diagonal' not in header
+    assert 'GLSL_matrix3x3_diagonal(0.0f)' not in header
+    # The zero-init is hoisted into the kernel body.
+    assert 'obj = GLSL_matrix3x3_diagonal(0.0f);' in kernel
+
+
+def test_uninitialized_matrix_declaration_list_hoisted():
+    """mat2 ma, mb;  -> both matrix globals bare + both zero-inits hoisted."""
+    header, kernel = tp("mat2 ma, mb;\n" + MAIN)
+    assert 'matrix2x2 ma' in header
+    assert 'GLSL_matrix2x2_diagonal(0.0f)' not in header
+    assert 'ma = GLSL_matrix2x2_diagonal(0.0f);' in kernel
+    assert 'mb = GLSL_matrix2x2_diagonal(0.0f);' in kernel
+
+
+def test_uninitialized_scalar_global_not_hoisted():
+    """float x;  -> a literal zero-init (compile-time constant); leave in place."""
+    header, kernel = tp("float x;\n" + MAIN)
+    # Scalar zero-init is a literal, stays at file scope (no hoist).
+    assert 'x =' not in kernel
+
+
+# ============================================================================
+# 5. A1 — non-constant scalar int/uint globals
+# ============================================================================
+# The int/uint hoist skip must be selective: an integer constant expression
+# OpenCL can fold (a possible array size) stays in place, but an int global
+# whose initializer OpenCL cannot fold (cast of a runtime value, vector member
+# access, dependence on a hoisted global) must be hoisted.
+
+def test_nonconst_int_cast_of_hoisted_float_hoisted():
+    """const int n = int(k); where k is a hoisted non-const -> hoist n."""
+    glsl = (
+        "const float g = 8.0, k = 24.0 / g;\n"
+        "const int n = int(k);\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    assert 'int n;' in header
+    assert '(int)(k)' not in header  # not a file-scope initializer
+    assert 'n = (int)(k);' in kernel
+
+
+def test_int_vector_member_product_hoisted():
+    """int tot = N.x * N.y; -> vector member access, OpenCL can't fold -> hoist."""
+    glsl = (
+        "const ivec2 N = ivec2(200, 100);\n"
+        "int tot_n = N.x * N.y;\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    assert 'int tot_n;' in header
+    assert 'tot_n = N.x * N.y;' in kernel
+
+
+def test_foldable_int_const_not_hoisted():
+    """const int M = N * 2; with N a const-int literal -> OpenCL folds; keep.
+
+    This is the regression guard: a foldable integer constant expression is a
+    legal array size and must stay a program-scope constant.
+    """
+    glsl = (
+        "const int N = 5;\n"
+        "const int M = N * 2;\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    assert 'const int M = N * 2;' in header
+    assert 'M =' not in kernel
+
+
+def test_literal_int_arithmetic_not_hoisted():
+    """const int K = 3 + 4; -> pure literal arithmetic, OpenCL folds; keep."""
+    header, kernel = tp("const int K = 3 + 4;\n" + MAIN)
+    assert 'const int K = 3 + 4;' in header
+    assert 'K =' not in kernel
+
+
+# ============================================================================
+# 6. A2 — array/aggregate globals with non-constant elements (Plan B:
+#    temp-local-array + copy-loop hoisting)
+# ============================================================================
+# OpenCL rejects any arithmetic/call in a file-scope initializer, but a
+# whole-array assignment (`arr = {...};`) is illegal in C, so the scalar hoist
+# cannot be reused. Instead: emit the array bare and sized, and hoist a
+# temp-local-array declaration (a NON-constant aggregate initializer is legal
+# on a LOCAL) followed by a copy loop into the bare global.
+
+STRUCT = "struct Mat { vec3 c; float a; float b; };\n"
+
+
+def test_struct_array_arithmetic_elements_hoisted():
+    """Mat mats[2] = Mat[2](Mat(vec3(1)*.9,...), ...) -> bare + temp/copy."""
+    glsl = (
+        STRUCT
+        + "Mat mats[2] = Mat[2](Mat(vec3(1)*.9,.5,.23), Mat(vec3(1)*.1,.2,.3));\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    # Global emitted bare and sized, no aggregate initializer at file scope.
+    assert 'Mat mats[2];' in header
+    assert '{{' not in header  # the brace initializer moved out of file scope
+    # Hoisted temp-local carries the real (non-constant) initializer.
+    assert 'Mat __init_mats[2] = {{' in kernel
+    # Copy loop writes every element into the bare global.
+    assert 'for (int __hi = 0; __hi < 2; ++__hi)' in kernel
+    assert 'mats[__hi] = __init_mats[__hi];' in kernel
+
+
+def test_unsized_array_gets_sized_and_hoisted():
+    """const vec3 positions[] = vec3[](...) -> sized bare decl, const dropped."""
+    glsl = (
+        "const vec3 positions[] = "
+        "vec3[](vec3(1.0,2.0,3.0), vec3(4.0)*2.0, vec3(0.5));\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    # Unsized [] rewritten to the element count; const dropped (hoisted global).
+    assert 'float3 positions[3];' in header
+    assert 'const float3 positions' not in header
+    # Temp-local sized to the same count + copy loop over 3.
+    assert 'float3 __init_positions[3] = {' in kernel
+    assert 'for (int __hi = 0; __hi < 3; ++__hi)' in kernel
+    assert 'positions[__hi] = __init_positions[__hi];' in kernel
+
+
+def test_all_constant_array_left_untouched():
+    """const vec3 c[2] = vec3[](pure literals) already compiles; leave in place."""
+    glsl = (
+        "const vec3 c[2] = vec3[](vec3(0.9,0.9,0.9), vec3(0.1,0.2,0.3));\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    # Constant aggregate initializer stays at file scope, byte-identical.
+    assert 'const float3 c[2] = {(float3)(0.9f, 0.9f, 0.9f), ' \
+           '(float3)(0.1f, 0.2f, 0.3f)};' in header
+    # No hoist artifacts.
+    assert '__init_c' not in kernel
+    assert 'c[__hi]' not in kernel
+
+
+def test_constant_scalar_array_zero_init_not_hoisted():
+    """float pts[2]; -> `{0.0f}` zero-init is constant; leave the wrap in place."""
+    header, kernel = tp("float pts[2];\n" + MAIN)
+    assert 'float pts[2] = {0.0f};' in header
+    assert '__init_pts' not in kernel
+
+
+def test_uninitialized_matrix_array_hoisted():
+    """mat3 grid[3]; -> bare `matrix3x3 grid[3];` + temp/copy of diagonal-zero.
+
+    The synthesized zero-init wraps a CALL (GLSL_matrix3x3_diagonal), which is
+    not a compile-time constant at file scope. The single-element wrap plus C's
+    tail zero-fill make the temp-local correct for the whole array.
+    """
+    header, kernel = tp("mat3 grid[3];\n" + MAIN)
+    assert 'matrix3x3 grid[3];' in header
+    assert 'GLSL_matrix3x3_diagonal' not in header
+    assert 'matrix3x3 __init_grid[3] = {GLSL_matrix3x3_diagonal(0.0f)};' in kernel
+    assert 'for (int __hi = 0; __hi < 3; ++__hi)' in kernel
+    assert 'grid[__hi] = __init_grid[__hi];' in kernel
+
+
+def test_symbolic_size_matrix_array_hoisted():
+    """mat3 grid[N]; with const int N -> bare `grid[N]` + loop bound N (in scope)."""
+    glsl = "const int N = 3;\nmat3 grid[N];\n" + MAIN
+    header, kernel = tp(glsl)
+    assert 'const int N = 3;' in header
+    assert 'matrix3x3 grid[N];' in header
+    assert 'matrix3x3 __init_grid[N] = {GLSL_matrix3x3_diagonal(0.0f)};' in kernel
+    assert 'for (int __hi = 0; __hi < N; ++__hi)' in kernel
+    assert 'grid[__hi] = __init_grid[__hi];' in kernel
+
+
+def test_multi_declarator_array_and_scalar_matrix_hoisted():
+    """mat3 flyerMat[3], flMat; -> both bare; array temp/copy + scalar hoist."""
+    header, kernel = tp("mat3 flyerMat[3], flMat;\n" + MAIN)
+    # Both declarators emitted bare on one line, siblings undisturbed.
+    assert 'matrix3x3 flyerMat[3], flMat;' in header
+    assert 'GLSL_matrix3x3_diagonal' not in header
+    # Array declarator -> temp/copy; scalar declarator -> plain assignment.
+    assert 'matrix3x3 __init_flyerMat[3] = ' \
+           '{GLSL_matrix3x3_diagonal(0.0f)};' in kernel
+    assert 'flyerMat[__hi] = __init_flyerMat[__hi];' in kernel
+    assert 'flMat = GLSL_matrix3x3_diagonal(0.0f);' in kernel
+
+
+def test_array_hoist_preserves_order_with_scalars():
+    """A hoisted scalar declared before an array keeps its earlier position."""
+    glsl = (
+        "vec3 a = normalize(vec3(1.0));\n"
+        "vec3 pal[2] = vec3[](vec3(0,0,0)/255.0, a);\n"
+        + MAIN
+    )
+    header, kernel = tp(glsl)
+    assert 'float3 a;' in header
+    assert 'float3 pal[2];' in header
+    # Scalar 'a' initializes before the array temp/copy that reads it.
+    assert kernel.index('a = GLSL_normalize(') < kernel.index('__init_pal')

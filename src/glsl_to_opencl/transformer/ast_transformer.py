@@ -21,11 +21,26 @@ Design principles:
 """
 
 import re
+from collections import namedtuple
 from typing import Dict, Optional, List
 from ..parser.ast_nodes import ASTNode
 from ..analyzer.type_checker import TypeChecker, GLSLType, TYPE_NAME_MAP
 from ..analyzer.symbol_table import SymbolTable
 from . import transformed_ast as IR
+
+# Category A2 — a hoisted program-scope ARRAY global. A whole-array assignment
+# (`arr = {...};`) is illegal in C, so an array cannot use the scalar hoist
+# channel. Instead the host renders a temp-local-array + copy-loop block (a
+# non-constant aggregate initializer is legal on a LOCAL). This record rides the
+# SAME ordered `hoisted_global_inits` channel as the scalar `(name, ir)` tuples
+# so inter-global declaration order is preserved; the host discriminates by
+# type. `size_text` is the array length as it appears in the bare decl (a
+# literal like `5`, a symbolic const like `N`, or an element count derived for
+# an unsized `[]`), reused verbatim as the copy-loop bound (a kept const global
+# is still in scope in the kernel body).
+HoistedArrayInit = namedtuple(
+    "HoistedArrayInit", "base_name elem_type size_text init_ir"
+)
 
 # Import TYPE_NAME_MAP at module level for use in _transform_call_expression
 # This avoids repeated imports inside the method
@@ -124,6 +139,11 @@ def _strip_type_qualifiers(type_name: str) -> str:
         return type_name
     parts = type_name.split()
     return parts[-1] if parts else type_name
+
+
+class _PreprocRouteAbort(Exception):
+    """Category E (Session 53) — a #if-block child is not safely routable
+    through the AST; the block falls back to the raw-text passthrough."""
 
 
 class TransformationError(Exception):
@@ -226,6 +246,14 @@ class ASTTransformer:
         # This is populated during transformation when function definitions are encountered
         self.user_function_return_types = {}
 
+        # Category AI — user functions with TYPE-overloads (>=2 definitions
+        # whose return types differ, e.g. `float f(float)` + `vec4 f(vec4)`).
+        # user_function_return_types collapses these to ONE type (last wins),
+        # so a call's inferred width is UNTRUSTWORTHY — the vector-conversion
+        # ctor (category N) must not truncate on it (would emit `.xyz` on a
+        # value that is actually a scalar). Populated by the pre-scan.
+        self.overloaded_return_type_fns = set()
+
         # Category D2 — user functions whose name collides with a Houdini header
         # builtin (HOUDINI_RESERVED_FUNCTIONS). Maps original GLSL name ->
         # `sh_<name>` emitted name. Populated by `_collect_function_renames` in a
@@ -260,6 +288,10 @@ class ASTTransformer:
         # assign per-invocation at the top of the kernel body.
         self._global_scope = False
         self.hoisted_global_inits = []
+        # Category A1: names of program-scope int/uint globals left in place as
+        # foldable integer constant expressions (possible array sizes). Used to
+        # decide whether a later int/uint init is itself foldable by OpenCL.
+        self._const_int_globals = set()
 
         # Track user-defined struct types for constructor detection
         # Maps struct name -> dict of field info {'field_name': 'field_type', ...}
@@ -343,6 +375,7 @@ class ASTTransformer:
         # Transform all top-level declarations. Top-level declarations are at
         # program (file) scope; hoisted_global_inits is (re)populated here.
         self.hoisted_global_inits = []
+        self._const_int_globals = set()
         self._global_scope = True
         declarations = []
         for decl in ast.named_children:
@@ -385,6 +418,10 @@ class ASTTransformer:
         self.function_renames = {}
         # Category AE — collected in the same walk (see __init__).
         self.user_function_names = set()
+        # Category AI — collected in the same walk (see __init__). Detect
+        # type-overloads (same name, differing return type) order-independently.
+        self.overloaded_return_type_fns = set()
+        seen_return_types = {}  # func name -> set of distinct GLSL return types
 
         def _reserve(func_name: str) -> None:
             if func_name and func_name in HOUDINI_RESERVED_FUNCTIONS:
@@ -394,6 +431,12 @@ class ASTTransformer:
             if decl.type == 'function_definition':
                 if decl.name:
                     self.user_function_names.add(decl.name)
+                    ret_node = decl.return_type
+                    if ret_node is not None:
+                        rts = seen_return_types.setdefault(decl.name, set())
+                        rts.add(ret_node.text.strip())
+                        if len(rts) > 1:
+                            self.overloaded_return_type_fns.add(decl.name)
                 _reserve(decl.name)
             elif decl.type == 'declaration':
                 # A body-less prototype: `float rotate2D(vec2, float);`
@@ -446,6 +489,9 @@ class ASTTransformer:
             'update_expression': self._transform_update_expression,
             'parenthesized_expression': self._transform_parenthesized_expression,
             'comma_expression': self._transform_comma_expression,
+            # Genuine OpenCL casts appear only in Stage-0-preprocessed #if
+            # block lines ((float2)(...) from vec2(...)) — routed since S53.
+            'cast_expression': self._transform_cast_expression,
             # Struct definitions
             'struct_specifier': self._transform_struct_specifier,
             # Preprocessor directives (Session 9)
@@ -498,6 +544,51 @@ class ASTTransformer:
                 glsl_type=TYPE_NAME_MAP['int'],
                 source_location=location
             )
+
+    def _transform_cast_expression(self, node: ASTNode) -> IR.TransformedNode:
+        """
+        Transform a genuine C-style cast (Session 53, category E).
+
+        GLSL has no casts, but Stage-0 (PreprocessorTransformer) rewrites
+        vector/scalar constructors on #if-block lines to OpenCL cast syntax
+        BEFORE parsing (`vec2(x, y)` -> `(float2)(x, y)`), so an AST-routed
+        block contains real cast_expression nodes. Re-emit them as a
+        TypeConstructor — same `(T)(args)` spelling — with the type attached
+        so vector/matrix detection sees through the cast. (Spurious grouping
+        mis-parses never reach here: `_disambiguate_casts` dissolved them at
+        parse time.)
+        """
+        type_node = node.child_by_field_name('type')
+        value_node = node.child_by_field_name('value')
+        if type_node is None or value_node is None:
+            raise TransformationError("Malformed cast expression",
+                                      node.start_point)
+        type_name = type_node.text.strip()
+
+        value = self._transform_node(value_node)
+        arguments = [value]
+        if isinstance(value, IR.ParenthesizedExpression):
+            inner = value.expression
+            arguments = (self._flatten_comma_expression(inner)
+                         if isinstance(inner, IR.CommaExpression) else [inner])
+
+        glsl_name = OPENCL_TO_GLSL_NAME.get(type_name, type_name)
+        return IR.TypeConstructor(
+            type_name=type_name,
+            arguments=arguments,
+            glsl_type=TYPE_NAME_MAP.get(glsl_name),
+            source_location=node.start_point,
+        )
+
+    def _flatten_comma_expression(self, node) -> list:
+        """Flatten a right-nested CommaExpression into an argument list."""
+        items = [node.left]
+        rest = node.right
+        while isinstance(rest, IR.CommaExpression):
+            items.append(rest.left)
+            rest = rest.right
+        items.append(rest)
+        return items
 
     def _transform_bool_literal(self, node: ASTNode) -> IR.BoolLiteral:
         """Transform boolean literal."""
@@ -647,6 +738,40 @@ class ASTTransformer:
             return True
         return self._get_type_name(node) in ('bvec2', 'bvec3', 'bvec4')
 
+    def _vector_ctor_arg_type(self, arg: IR.TransformedNode) -> Optional[str]:
+        """
+        Vector type name of a single vector-constructor argument, for the
+        category-N conversion decision only.
+
+        Falls back for an arithmetic/bitwise BinaryOp whose overall type
+        `_get_type_name` can't resolve because ONE operand is statically
+        untypeable — the common case being an object-like macro constant
+        (`#define scale 20.`, which survives as a bare identifier since object
+        macros aren't inlined). If the other operand is a proven vector, the
+        result has that vector's width and base (GLSL broadcast /
+        componentwise). `ivec2(uv / scale)` then converts (`convert_int2`)
+        instead of falling back to the invalid `(int2)(float2)` C cast.
+
+        Safe for the CONVERSION decision specifically: the fallback only fires
+        when one operand is a GENUINE vector, so `vec op x` is a vector of that
+        vector's shape regardless of the other operand. Deliberately NOT wired
+        into `_infer_binary_op_type` (whose result feeds the multi-arg
+        truncation budgeter — that path would over-count when a flat
+        `local_types` entry is a stale vector, dropping a real ctor arg).
+        """
+        arg_type = self._get_type_name(arg)
+        if arg_type is not None:
+            return arg_type
+        if isinstance(arg, IR.BinaryOp) and arg.operator in (
+                '+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>'):
+            left_type = self._get_type_name(arg.left)
+            right_type = self._get_type_name(arg.right)
+            if self._is_vector_type(left_type) and not right_type:
+                return left_type
+            if not left_type and self._is_vector_type(right_type):
+                return right_type
+        return arg_type
+
     def _transform_vector_conversion_ctor(
         self,
         function_name: str,
@@ -674,6 +799,15 @@ class ASTTransformer:
         (scalar broadcast, component list, identity, widening, unknown
         argument type) so the caller falls through unchanged.
         """
+        # Category AI: if the arg's width traces to a TYPE-overloaded user
+        # function, the inferred type is untrustworthy (return types collapse
+        # to one — see overloaded_return_type_fns). Truncating on it would emit
+        # `.xyz` on what is actually a scalar (`vec3(f(scalar))`). Keep the
+        # plain cast: `(float3)(scalar)` broadcasts correctly, and is an
+        # identity for a same-type vector.
+        if self._expr_type_uses_overloaded_fn(arg):
+            return None
+
         # Scalar-from-vector: GLSL float(vecN)/int(vecN)/uint(vecN)/bool(vecN)
         # extracts component .x (then converts the scalar). OpenCL rejects the
         # C cast (float)(float3_expr) just as it does the vector cast; emit
@@ -710,7 +844,7 @@ class ASTTransformer:
             return None  # scalar/matrix/sampler constructor: not this rewrite
         target_base, target_width = target
 
-        arg_type = self._get_type_name(arg)
+        arg_type = self._vector_ctor_arg_type(arg)
         arg_info = VECTOR_TYPE_INFO.get(arg_type) if arg_type else None
         if arg_info is None:
             return None  # scalar broadcast or unknown type: keep the cast
@@ -1186,6 +1320,13 @@ class ASTTransformer:
             GLSLType of the function's return value, or None if unknown
         """
         from ..analyzer.type_checker import TYPE_NAME_MAP
+
+        # Matrix constructor dispatchers (matrix_ops.h). Stage-0 pre-renames
+        # `matN(` -> `GLSL_matN(` on #if-block / #define lines BEFORE parsing,
+        # so an AST-routed block (Session 53) sees the renamed spelling — type
+        # it like the GLSL ctor or `GLSL_mat2(...) * v` misses matmul lowering.
+        if function_name in ('GLSL_mat2', 'GLSL_mat3', 'GLSL_mat4'):
+            return TYPE_NAME_MAP.get(function_name[5:])
 
         # Matrix functions - return same type as input. Normalize the argument
         # type (parameters register OpenCL names like 'matrix3x3', possibly
@@ -2121,6 +2262,31 @@ class ASTTransformer:
             return self._expr_type_uses_user_fn(node.target)
         return False
 
+    def _expr_type_uses_overloaded_fn(self, node: IR.TransformedNode) -> bool:
+        """
+        Like _expr_type_uses_user_fn, but True only when the type-DETERMINING
+        sub-expression is a call to a *type-overloaded* user function (category
+        AI) — whose collapsed single return type mis-infers the width. Walks the
+        same type-determining spine (call callee/args, unary/binary/assignment/
+        parenthesized operands); a swizzle's width comes from its member string,
+        not its base, so member-access bases are not inspected.
+        """
+        if isinstance(node, IR.CallExpression):
+            if node.function in self.overloaded_return_type_fns:
+                return True
+            return any(self._expr_type_uses_overloaded_fn(a)
+                       for a in node.arguments)
+        if isinstance(node, IR.ParenthesizedExpression):
+            return self._expr_type_uses_overloaded_fn(node.expression)
+        if isinstance(node, IR.UnaryOp):
+            return self._expr_type_uses_overloaded_fn(node.operand)
+        if isinstance(node, IR.BinaryOp):
+            return (self._expr_type_uses_overloaded_fn(node.left)
+                    or self._expr_type_uses_overloaded_fn(node.right))
+        if isinstance(node, IR.AssignmentOp):
+            return self._expr_type_uses_overloaded_fn(node.target)
+        return False
+
     def _truncate_overflow_ctor_args(
         self,
         opencl_type: str,
@@ -2738,9 +2904,86 @@ class ASTTransformer:
             return self._is_ct_constant(node.operand)
         if isinstance(node, (IR.TypeConstructor, IR.ArrayConstructor)):
             return all(self._is_ct_constant(arg) for arg in (node.arguments or []))
+        # An array/brace initializer (A2) is a program-scope constant only if
+        # every element is: a zero-vector wrap `{(float3)(0.0f)}` stays at file
+        # scope, but an arithmetic element or a synthesized matrix diagonal
+        # `{GLSL_matrix3x3_diagonal(0.0f)}` is non-constant and must be hoisted.
+        if isinstance(node, IR.ArrayInitializer):
+            return all(self._is_ct_constant(e) for e in (node.elements or []))
         # BinaryOp, CallExpression, Identifier, MemberAccess, ArrayAccess,
-        # TernaryOp, ArrayInitializer, ... -> not a program-scope constant.
+        # TernaryOp, ... -> not a program-scope constant.
         return False
+
+    def _is_int_foldable(self, node) -> bool:
+        """
+        Category A1 — True if `node` is an *integer* constant expression OpenCL
+        folds at program scope (so a non-`_is_ct_constant` int/uint global with
+        this initializer must be LEFT in place — it may be an array size or case
+        label). False means OpenCL cannot fold it, so it must be hoisted.
+
+        Foldable: integer/bool literals; unary/parenthesized/binary combinations
+        of foldable operands; references to other int/uint globals we kept as
+        constants (`self._const_int_globals`); and an int/uint cast whose operand
+        is itself foldable (`int(N)`).
+
+        NOT foldable (⇒ hoist): a float literal or float-typed operand, a call,
+        a vector/matrix member access (`N.x` — not folded even on a const
+        vector), a subscript, or a reference to a hoisted (non-constant) global.
+        """
+        if node is None:
+            return False
+        if isinstance(node, (IR.IntLiteral, IR.BoolLiteral)):
+            return True
+        if isinstance(node, IR.FloatLiteral):
+            return False
+        if isinstance(node, IR.ParenthesizedExpression):
+            return self._is_int_foldable(node.expression)
+        if isinstance(node, IR.UnaryOp):
+            return self._is_int_foldable(node.operand)
+        if isinstance(node, IR.BinaryOp):
+            return (self._is_int_foldable(node.left)
+                    and self._is_int_foldable(node.right))
+        if isinstance(node, IR.Identifier):
+            return node.name in self._const_int_globals
+        # An int/uint cast is a TypeConstructor over a single argument.
+        if isinstance(node, IR.TypeConstructor):
+            if node.type_name in ('int', 'uint') and node.arguments:
+                return all(self._is_int_foldable(a) for a in node.arguments)
+            return False
+        # CallExpression, MemberAccess, ArrayAccess, TernaryOp, ... -> not folded.
+        return False
+
+    @staticmethod
+    def _array_init_len(init_ir) -> Optional[int]:
+        """Element count of an array initializer IR, or None if not countable."""
+        if isinstance(init_ir, IR.ArrayConstructor):
+            return len(init_ir.arguments or [])
+        if isinstance(init_ir, IR.ArrayInitializer):
+            return len(init_ir.elements or [])
+        return None
+
+    def _hoist_array_global(self, base_name, var_name, opencl_type, init_ir):
+        """Category A2 — record a non-constant program-scope ARRAY global for
+        temp-local + copy-loop hoisting, and return the bare-decl name (the
+        array declarator, sized).
+
+        `var_name` is the raw declarator text (`mats[2]`, `positions[]`,
+        `grid[N]`). The size text between the brackets is reused as the
+        copy-loop bound; an unsized `[]` is filled from the initializer's
+        element count so the bare global is correctly dimensioned (a later
+        `sizeof(arr)/sizeof(arr[0])` loop bound then folds).
+        """
+        open_b = var_name.index('[')
+        close_b = var_name.rindex(']')
+        size_text = var_name[open_b + 1:close_b].strip()
+        if not size_text:
+            count = self._array_init_len(init_ir)
+            size_text = str(count) if count is not None else ''
+        self.hoisted_global_inits.append(
+            HoistedArrayInit(base_name, opencl_type, size_text, init_ir)
+        )
+        # Bare decl carries the (now always explicit) size.
+        return f"{base_name}[{size_text}]"
 
     def _unique_shadow_name(self, base_name: str) -> str:
         """Category AE — pick a rename for a local that shadows a user function.
@@ -2890,27 +3133,64 @@ class ASTTransformer:
                 initializer = self._transform_node(initializer_node)
 
                 # Category A — hoist a non-constant program-scope initializer.
+                # (Shadow discard happens after this block — see below — so a
+                # self-referencing init `float r = r;` still reads the param.)
                 # OpenCL rejects any arithmetic/call in a file-scope initializer
                 # ("initializer element is not a compile-time constant"), even
                 # with __constant. Emit the global bare (mutable, default-zero)
                 # and record the real initializer; the host (tests/transpile.py /
                 # Houdini @KERNEL) assigns it at the top of the kernel body, the
                 # same pattern main_header.cl uses for `static float iTime`.
-                # Skips: array globals (whole-array assignment is illegal) and
-                # scalar int/uint globals (array-size/loop-bound candidates whose
-                # integer constant expressions OpenCL already folds).
+                # Skips: scalar int/uint globals (array-size/loop-bound
+                # candidates whose integer constant expressions OpenCL already
+                # folds). Array globals take the A2 temp-local + copy-loop path
+                # below (whole-array assignment `arr = {...};` is illegal in C).
                 if (self._global_scope
-                        and '[' not in var_name
-                        and opencl_type not in ('int', 'uint')
+                        and not is_array
                         and not self._is_ct_constant(initializer)):
-                    self.hoisted_global_inits.append((var_name, initializer))
-                    initializer = None  # bare declaration; assigned in the kernel
+                    # A1: an int/uint global stays in place only if OpenCL can
+                    # fold its initializer (it may be an array size / case
+                    # label). A non-foldable int/uint init — a cast of a runtime
+                    # value, a vector member access (`N.x*N.y`), or a reference
+                    # to a hoisted global — must be hoisted like any other type.
+                    if opencl_type in ('int', 'uint'):
+                        do_hoist = not self._is_int_foldable(initializer)
+                    else:
+                        do_hoist = True
+                    if do_hoist:
+                        self.hoisted_global_inits.append((var_name, initializer))
+                        initializer = None  # bare decl; assigned in the kernel
+                        hoisted_any = True
+                # A2: an array/aggregate global with a non-constant element
+                # initializer. Emit it bare and sized, and hoist a temp-local
+                # array (a non-constant aggregate init is legal on a LOCAL)
+                # copied element-by-element into the bare global in the kernel.
+                elif (self._global_scope
+                        and is_array
+                        and not self._is_ct_constant(initializer)):
+                    var_name = self._hoist_array_global(
+                        base_name, var_name, opencl_type, initializer)
+                    initializer = None  # bare, sized decl; filled in the kernel
                     hoisted_any = True
             else:
                 # No explicit initializer - create zero initializer to match GLSL semantics
                 # GLSL implicitly initializes undefined variables to zero, while OpenCL
                 # leaves them undefined. This creates appropriate zero initializers.
                 initializer = self._create_zero_initializer(glsl_type, opencl_type)
+
+                # Category A3 — a synthesized zero-initializer whose value is a
+                # CALL (matrices -> GLSL_matrixNxN_diagonal(0.0f)) is not a
+                # compile-time constant at program scope. Hoist it like an
+                # explicit non-const initializer. Scalar/vector zero-inits are
+                # literals (ct-constant) and stay in place; arrays keep their
+                # ArrayInitializer below (whole-array assignment is illegal).
+                if (self._global_scope
+                        and '[' not in var_name
+                        and initializer is not None
+                        and not self._is_ct_constant(initializer)):
+                    self.hoisted_global_inits.append((var_name, initializer))
+                    initializer = None  # bare decl; assigned in the kernel body
+                    hoisted_any = True
 
                 # For arrays, wrap the initializer in ArrayInitializer with curly braces
                 # OpenCL requires array initializers to be in the form: type name[size] = {...}
@@ -2920,6 +3200,29 @@ class ASTTransformer:
                         glsl_type=None,
                         source_location=None
                     )
+                    # A2 — a synthesized array zero-init whose element is a CALL
+                    # (matrix diagonal: `{GLSL_matrix3x3_diagonal(0.0f)}`) is not
+                    # a compile-time constant at file scope. Hoist it via the
+                    # temp-local + copy loop; C's tail zero-fill makes the
+                    # single-element wrap correct for the whole array. Constant
+                    # scalar/vector zero wraps (`{0.0f}`, `{(float3)(0.0f)}`)
+                    # stay in place.
+                    if (self._global_scope
+                            and not self._is_ct_constant(initializer)):
+                        var_name = self._hoist_array_global(
+                            base_name, var_name, opencl_type, initializer)
+                        initializer = None  # bare, sized decl; filled in kernel
+                        hoisted_any = True
+
+            # A1: remember an int/uint global we KEPT in place (a compile-time
+            # constant or OpenCL-foldable integer expression) so a later int/uint
+            # initializer referencing it is recognized as foldable too.
+            if (self._global_scope
+                    and not is_array
+                    and opencl_type in ('int', 'uint')
+                    and initializer is not None
+                    and base_name):
+                self._const_int_globals.add(base_name)
 
             # Category AE — a local whose name shadows a user function it CALLS
             # in its own initializer: `float ao = ao(p);`. In OpenCL the bare
@@ -2946,6 +3249,17 @@ class ASTTransformer:
                 emit_name = self._unique_shadow_name(base_name)
                 self.local_renames[base_name] = emit_name
                 self.local_types[emit_name] = glsl_type
+
+            # Category B residual — a local that shadows an out/inout pointer
+            # param (`float r` inside a fn taking `inout vec3 r`). From here on
+            # in this block the bare name binds to the local, so its reads must
+            # NOT be dereferenced. Drop it from pointer_params AFTER the
+            # initializer was transformed above (a self-referencing init
+            # `float r = r;` still reads the param) — _transform_compound_statement
+            # restores the set on block exit, so later param reads deref again.
+            if (not self._global_scope
+                    and base_name in self.pointer_params):
+                self.pointer_params.discard(base_name)
 
             # Create Declaration node (without type_name for DeclarationList)
             declarations.append(IR.Declaration(
@@ -3167,6 +3481,12 @@ class ASTTransformer:
 
     def _transform_compound_statement(self, node: ASTNode) -> IR.CompoundStatement:
         """Transform block statement ({ ... })."""
+        # Category B residual — block-scope the pointer-param deref set so a
+        # nested local that shadows an out/inout param (`float r` inside a
+        # function taking `inout vec3 r`) suppresses the deref only for this
+        # block. _transform_declaration discards the shadowed name; restoring
+        # the snapshot on exit brings the param's deref back for later reads.
+        saved_pointer_params = set(self.pointer_params)
         statements = []
         for stmt in node.named_children:
             if stmt.type == 'declaration':
@@ -3192,6 +3512,7 @@ class ASTTransformer:
                 elif transformed is not None:
                     statements.append(transformed)
 
+        self.pointer_params = saved_pointer_params
         return IR.CompoundStatement(
             statements=statements,
             source_location=node.start_point
@@ -3631,23 +3952,105 @@ class ASTTransformer:
     # Preprocessor Directives (Session 9)
     # ========================================================================
 
-    def _transform_preprocessor(self, node: ASTNode) -> IR.PreprocessorDirective:
+    def _transform_preprocessor(self, node: ASTNode) -> IR.TransformedNode:
         """
         Transform preprocessor directive.
 
-        Preprocessor directives are already transformed by PreprocessorTransformer
-        before AST parsing, so we just pass them through as-is.
+        Single directives (#define, #undef, ...) pass through as raw text —
+        PreprocessorTransformer already transformed them before parsing.
 
-        Args:
-            node: Preprocessor directive AST node
-
-        Returns:
-            PreprocessorDirective IR node with raw text
+        Category E (Session 53): a statement-level `#if`/`#ifdef` BLOCK inside
+        a function body is routed through the normal AST transform instead
+        (tree-sitter parses its contents as structured statements, but the
+        historical raw-text passthrough left them untyped, so e.g. a matrix
+        `*` inside the block never lowered to GLSL_mul). Any parse error or
+        unrecognized child falls back to the raw-text passthrough — the worst
+        case per block is the status quo. Program-scope blocks (which wrap
+        whole functions/declarations) keep the raw path.
         """
-        # Get the raw text of the preprocessor directive
+        if (node.type in ('preproc_if', 'preproc_ifdef', 'preproc_ifndef')
+                and not self._global_scope):
+            block = self._try_transform_preproc_block(node)
+            if block is not None:
+                return block
+
+        # Raw-text passthrough (single directives + fallback for blocks).
         text = node.text.strip()
 
         return IR.PreprocessorDirective(
             text=text,
             source_location=node.start_point
         )
+
+    # Statement types safe to route through _transform_node from inside a
+    # preprocessor conditional block. Anything else (ERROR nodes, expression
+    # fragments from a block that splits a statement, ...) aborts the routing
+    # and falls back to the raw-text passthrough.
+    _PREPROC_ROUTABLE_STMTS = frozenset((
+        'declaration', 'expression_statement', 'return_statement',
+        'if_statement', 'for_statement', 'while_statement', 'do_statement',
+        'break_statement', 'continue_statement', 'compound_statement',
+        'preproc_if', 'preproc_ifdef', 'preproc_ifndef',
+    ))
+    # Single directives legal inside a routed block — kept as raw text lines.
+    _PREPROC_RAW_CHILDREN = frozenset((
+        'preproc_def', 'preproc_function_def', 'preproc_call',
+    ))
+
+    def _try_transform_preproc_block(self, node: ASTNode):
+        """Route a clean statement-level conditional block through the AST.
+
+        Returns an IR.PreprocessorBlock, or None if the block is not safely
+        routable (parse errors, unknown children, or a transform failure).
+        """
+        if node.has_error:
+            return None
+        try:
+            segments = []
+            self._collect_preproc_segments(node, segments)
+        except Exception:
+            # Fail-safe: ANY problem routing the block (unknown child shape,
+            # a transform bug on unusual content, ...) falls back to the
+            # raw-text passthrough — never worse than the pre-S53 behavior.
+            return None
+        return IR.PreprocessorBlock(
+            segments=segments,
+            source_location=node.start_point,
+        )
+
+    def _collect_preproc_segments(self, node: ASTNode, segments) -> None:
+        """Append (directive_line, [transformed statements]) segments for a
+        preproc_if/ifdef/elif/else node, recursing through the alternative
+        chain. Raises _PreprocRouteAbort on any unroutable child."""
+        directive_line = node.text.split('\n', 1)[0].rstrip()
+        stmts = []
+        segments.append((directive_line, stmts))
+
+        # The condition/name child is part of the directive line — skip it by
+        # position (its text is embedded in directive_line already).
+        cond = (node.child_by_field_name('name')
+                or node.child_by_field_name('condition'))
+        cond_point = cond.start_point if cond is not None else None
+
+        for child in node.named_children:
+            ctype = child.type
+            if cond_point is not None and child.start_point == cond_point:
+                continue
+            if ctype == 'comment':
+                continue
+            if ctype in ('preproc_else', 'preproc_elif'):
+                # Alternative chain: #elif recurses (it may nest another
+                # alternative); #else is a plain terminal segment.
+                self._collect_preproc_segments(child, segments)
+                continue
+            if ctype in self._PREPROC_RAW_CHILDREN:
+                stmts.append(IR.PreprocessorDirective(
+                    text=child.text.strip(),
+                    source_location=child.start_point,
+                ))
+                continue
+            if ctype not in self._PREPROC_ROUTABLE_STMTS:
+                raise _PreprocRouteAbort(ctype)
+            transformed = self._transform_node(child)
+            if transformed is not None:
+                stmts.append(transformed)

@@ -74,6 +74,16 @@ _PAREN_PRIMITIVE_CTOR = re.compile(r'\(\s*(float|int|uint|double)\s*\(')
 _PRECISION_STMT = re.compile(r'\bprecision[ \t]+(?:highp|mediump|lowp)[ \t]+\w+[ \t]*;')
 _PRECISION_QUALIFIER = re.compile(r'\b(?:highp|mediump|lowp)[ \t]+')
 
+# Category X: GLSL accepts the redundant square spelling `matNxN` as an exact
+# synonym of `matN` (`mat3x3` == `mat3`), in both type-name and constructor
+# position. tree-sitter-glsl and OpenCL-C know only `matN`, so the spelling
+# leaked through verbatim and clang errored `unknown type name 'mat3x3'`. The
+# backreference `\b([234])x\1\b` matches only the square cases and rewrites
+# them to `matN`; the non-square spellings (`mat2x4`, `mat3x2`, `mat4x2`) are
+# genuinely distinct types and are deliberately left untouched (they need real
+# struct types — deferred). Same-line, so ParseError line numbers stay accurate.
+_SQUARE_MATRIX_SPELLING = re.compile(r'\bmat([234])x\1\b')
+
 # Category P (cluster 3): tree-sitter-glsl does not recognise GLSL's logical-XOR
 # operator `^^`. `a ^^ b` on bools equals `a != b`, but `^^` binds looser than
 # almost everything (only `||` is looser) whereas `!=` binds at equality level,
@@ -281,6 +291,7 @@ def _rename_reserved_identifiers(source: str) -> str:
 def _normalize_array_syntax(source: str) -> str:
     """Rewrite GLSL spellings that tree-sitter-glsl cannot parse."""
     source = _rename_reserved_identifiers(source)
+    source = _SQUARE_MATRIX_SPELLING.sub(r'mat\1', source)
     source = _TYPE_FIRST_ARRAY_DECL.sub(r'\1 \3[\2]', source)
     source = _UNSIZED_ARRAY_CTOR.sub(r'\1[1](', source)
     source = _CONST_PARAM_QUALIFIER.sub(_collapse_const_param_qualifier, source)

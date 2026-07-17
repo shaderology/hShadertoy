@@ -106,6 +106,20 @@ Status legend: `TODO` · `IN-PROGRESS` · `DONE` · `BLOCKED-ON-HOUDINI` ·
   (S/N/mix-select). Deferred (still under X, harder): `inversesqrt`-in-macro,
   `mat3x2`/`mat4x2` non-square matrices. New follow-ups below: **mix→select**,
   **vec4(bvec)→convert**.
+- **Status (Session 54, 2026-07-16, +5 PASS, 0 regressed):** cleared the
+  **square full-name spellings** slice from the deferred list. GLSL's `matNxN`
+  square spelling (`mat3x3`/`mat2x2`/`mat4x4`) is an exact synonym of `matN`
+  but leaked through verbatim → clang `unknown type name 'mat3x3'`. Added
+  `_SQUARE_MATRIX_SPELLING = re.compile(r'\bmat([234])x\1\b')` + one `.sub` in
+  `parser/glsl_parser.py::_normalize_array_syntax` (backreference `x\1` matches
+  ONLY the square cases). Zero-regress by construction — the only 7 shaders
+  containing a square spelling were all already failing. **FIXED: Mlcczs,
+  XtfyWs, lltBzr, tsdSzn, wtjGDW. PASS 1348→1353.** Branch
+  `fix/transpiler-x-square-matrix`. **X residual now ~15:** non-square matrices
+  (4sBfW3 `mat2x4`) still deferred (need real struct types); `not(bvec)`
+  (3d23WK), `fract`-overload (MlsSzf), float2→float3/4 init/assign (ll2cRR,
+  llBcW1), `must use 'struct' tag` (4sSXWt, 4stSRf, 4dfXW4), and opaque
+  BUILD_PROGRAM_FAILURE stars (3dGSD3, 3lcGR2, 3tjyWy, 4ttBRB).
 
 ### AA — ++/-- on a vector · fails 5 / shaders 5 / sole 2 · compile · LOW-MED
 - **Root cause:** OpenCL forbids `++`/`--` on vector types → "cannot increment
@@ -252,6 +266,29 @@ Status legend: `TODO` · `IN-PROGRESS` · `DONE` · `BLOCKED-ON-HOUDINI` ·
   textual family); singles: 4dtczB (out-param forwarded to out-param emits
   `*p` instead of `p`), 4lSyRm, MstXzN, XdtXDX (AD `* *`), XlXfDs
   (`#if __VERSION__`), XtfcRX. Root-cause singles individually if reopened.
+- **B-residual: local shadows an out/inout pointer param** — **DONE (Session 55,
+  2026-07-17, +1 PASS, 0 regressed).** A nested local re-declaring a pointer
+  param's name (`inout vec3 r` … `{ float r = 0.05; float r2 = r*r; }`) still had
+  the pointer deref applied to its reads (`*r * *r` → "indirection requires
+  pointer operand ('float')"), because `pointer_params` was a FLAT per-function
+  set with no block scoping. Fix: `_transform_compound_statement` snapshots/
+  restores `pointer_params` around each block; `_transform_declaration` discards
+  a shadowed name (after transforming the initializer, so `float r = r;` still
+  reads the param). Transformer-only. Hash rig: exactly 1 pass changed output
+  (tsXBzs) — zero-regress by construction (a pointer-param shadow is always a
+  pre-existing compile failure). FIXED: tsXBzs. **PASS 1353→1354.** Branch
+  `fix/transpiler-b-pointer-shadow`. Tests:
+  `test_transformer_pointer_param_shadow.py` (+2).
+- **B-residual after S55 (S55 re-triage verdict):** the remaining B sole-blockers
+  are ALL macro-textual/pointer interactions with no localized AST fix — **4dtczB**
+  (`#define SampleMaterial MetallisedMarble`: a macro aliasing a function name
+  defeats out-param call-site resolution — the resolver keys on the SPELLED
+  callee, absent from `pointer_params`, so it mis-derefs every arg), **XdKSRV**
+  (`#define PUTN(n) printInt(...)`: out-param call inside a macro body, invisible
+  to AST `&`-insertion), **XsXfz2/3dGXDt/XtfcRX** (pointer args through macro
+  bodies / stack-machine `#define`s). These belong to the macro-expander (N) / J
+  textual family and need owner approval before a redesign — do NOT reopen as a
+  "cheap B" slice.
 
 ### A — global non-const initializer · fails 62 / shaders 61 / sole 16 · compile · HIGH
 - **Root cause:** OpenCL program-scope variables require a **compile-time-constant
@@ -317,6 +354,79 @@ Status legend: `TODO` · `IN-PROGRESS` · `DONE` · `BLOCKED-ON-HOUDINI` ·
   regressed (487→506); A dropped off the top categories.** 6 of 23 image-pass
   targets still blocked by a DIFFERENT category in a buffer pass. See Session 8
   in PROGRESS.md.
+- **A3 + A1 residual — DONE (Session 51, 2026-07-15, +12 PASS, 0 regressed,
+  1291→1303).** The 999→1499 expansion re-opened A (29 shaders). Two
+  completeness gaps in the S8 hoisting, fixed together (owner-approved,
+  transformer-only, no new mechanism): **A3 — uninitialized matrix globals**
+  (`mat3 obj;`): `_create_zero_initializer` returns a CALL
+  `GLSL_matrixNxN_diagonal(0.0f)` and the no-initializer branch never ran the
+  hoist check → now it does (same predicate). **A1 — non-const int/uint
+  globals** (`int n = int(k)`, `int t = N.x*N.y`): the blanket int/uint skip
+  now yields only to a precise `_is_int_foldable` predicate (+`_const_int_globals`
+  tracking) so a real array-size constant (`N*2`) stays but a non-foldable int
+  hoists. FIXED 11×A3 + 1×A1; the rest unmasked downstream cats. Tests:
+  `test_transformer_global_init_hoisting.py` +6.
+- **A2 residual — DONE (Session 52, 2026-07-15, +10 PASS, 0 regressed,
+  1303→1313). Owner-approved TWO-BRANCH RACE (S38 precedent); temp-array +
+  copy-loop won.** Array/aggregate globals with non-constant elements
+  (`Mat mats[5] = {{(float3)(1)*0.9f, ...}}` WlK3Rd, unsized
+  `const float3 positions[] = {...spacing*GLSL_cos(...)...}` 3sscDj, and the
+  synthesized `{GLSL_matrixNxN_diagonal(0.0f)}` wrap on uninit matrix arrays,
+  4lXGRl family) were blocked by the `'[' not in var_name` guard — whole-array
+  assignment is illegal in C. 11 compile probes (RTX 2070, no -cl-std) proved
+  both candidate mechanisms up front. **Race:** per-element assignment
+  (`fix/transpiler-a2-element-assign`, +7 — cannot unroll `#define`-sized
+  `carMat[NCAR]`, discarded) vs **temp-local array + copy-loop
+  (`fix/transpiler-a2-temp-copy`, +10 — MERGED 5106f1fd)**: emit the global
+  bare+sized (unsized `[]` → element count), drop const, record a
+  `HoistedArrayInit(base, elem_type, size_text, init_ir)` on the SAME ordered
+  `hoisted_global_inits` channel; hosts render
+  `{ T __init_x[N] = <init>; for (int __hi=0;__hi<N;++__hi) x[__hi]=__init_x[__hi]; }`
+  — a non-constant aggregate initializer is legal on a LOCAL, symbolic sizes
+  (`N`, `NCAR`) stay in scope, C tail-zero-fill makes the single-element wrap
+  whole-array-correct. `_is_ct_constant` now recurses into `ArrayInitializer`
+  (all-constant arrays stay byte-identical — e.g. Mlcczs `full_palette[528]`).
+  FIXED: WlK3Rd tl2XzG 3sscDj + all 7 matrix-array shaders. A2 error also gone
+  in 3ld3WX/Mlcczs/3dK3zR/ld2BWW/tsjyDG/MlBfRV (other blockers remain). Known
+  residual: multi-dim arrays (`a[2][3]`) with non-const elements would emit a
+  malformed loop bound — absent from the corpus (blast radius 22, all
+  accounted). **Category A is CLOSED as a blocker.**
+
+### E — matrix mul in preprocessor territory (#if blocks / #define bodies) · was 24 shaders / 17 sole · compile · MED
+- **DONE (Session 53, 2026-07-16, +35 PASS, 0 regressed, 1313→1348 — biggest
+  single-session win of the campaign).** Merged f47d7e74 (fix 07ddfeab).
+- **Root cause (S53 investigation):** the S19 AST matmul lowering is CORRECT —
+  every E failure sat in code the AST never structurally saw: **(A)**
+  statement-level `#if`/`#ifdef` blocks in function bodies, flattened to RAW
+  TEXT by `_transform_preprocessor` even though tree-sitter parses their
+  contents as statements (incl. two decl-inside-`#if`/use-outside cases where
+  the USE line was AST-visible but the matrix type evidence was textual:
+  wll3z2, wtKXWV); **(B)** `#define` macro bodies (`#define r(v,t) v *=
+  mat2(...)`, `...(p)*mat2(...)`), where the S14/S20 textual pass renamed the
+  ctor but never wrapped the `*`. An investigation-subagent claim that 7
+  sole-blockers were "stale artifacts" was DISPROVED by re-test — always
+  re-verify agent claims against the campaign compile path.
+- **Fix:** (1) **preproc-block AST routing** — `_try_transform_preproc_block`
+  routes clean statement children through `_transform_node`, re-emitted inside
+  the original directives (`IR.PreprocessorBlock`, both emitters); fail-safe
+  fallback to raw text on parse errors/unknown children/any exception;
+  program-scope blocks keep the raw path. Needed typing gaps: a
+  `cast_expression` handler (Stage-0 rewrites `vecN(...)` → `(floatN)(...)` on
+  #if lines BEFORE parsing; the unknown-node path used to silently DROP casts)
+  and `GLSL_matN(...)` return typing in `_infer_builtin_function_type`.
+  (2) **macro-body wrap** — `_wrap_matrix_ctor_muls` in
+  `preprocessor_transformer.py` wraps `*`/`*=` with a literal `GLSL_matN(`
+  operand in `GLSL_mul` (balanced-paren operand scan, associativity guards;
+  `GLSL_mul` has NO vec·vec/scalar·scalar overload so evidence is mandatory).
+- **Collateral wins:** the routing also cleared most "ifdef-textual" residuals
+  in OTHER categories — B dropped 39→25 failing passes; 19 of the 35 flips
+  were non-E ids. E is OFF THE BOARD.
+- **Deferred:** XlcBR7 / Wl23WV — `p * ROT` where `ROT`/`AP0_2_AP1_MAT` are
+  `#define`d macro-NAME operands (M·M chains) with no literal ctor on the
+  line; needs macro type tracking. MtXfWn cannot recompile within any tool
+  budget (pathological, pre-existing); MttcWr (was-PASS) accepted via
+  statement-level output-diff equivalence (re-formatting only).
+- **Tests:** `tests/unit/test_transformer_preproc_matrix.py` (+13).
 
 ### G — preprocessor #if/#ifdef splits statements · fails 83 / shaders 71 / sole ~83 · transpile · HIGH
 - **DONE (Session 38, 2026-07-11, +29 PASS, 0 regressed, 799→828).** Owner-approved
@@ -364,7 +474,7 @@ Status legend: `TODO` · `IN-PROGRESS` · `DONE` · `BLOCKED-ON-HOUDINI` ·
 
 | Cat | fails | sole | stage | one-line root cause / likely fix location |
 |-----|------:|-----:|-------|-------------------------------------------|
-| N | 61→**19** | 12 | compile | **DONE (Session 10, 2026-07-03, +23 PASS, 0 regressed).** Root cause: EVERY vector ctor emitted as C cast `(T)(...)`; OpenCL vector literals can't convert element types or truncate. Fix: `_transform_vector_conversion_ctor` in the ctor branch — `ivec2(v2)`→`convert_int2(v2)`, `vec3(v4)`→`.xyz`, bool masks →`convert_TN((m) & 1)` (vector relational = -1-for-true; `&1` normalizes). + `OPENCL_TO_GLSL_NAME` fix in `_infer_builtin_function_type` (params register OpenCL names; `TYPE_NAME_MAP.get('float3')` was silently None) + texture*→vec4 inference + typed comparison-lowering masks. **Residual 19 shaders:** ctor-in-`#define` (macro bodies untransformed — J/V family), scalar-from-vector `float(uvec3)` (GLSL takes .x — same site, scalar targets, ~6 shaders), untypeable args. **Session 21 (2026-07-09, +8 PASS, 0 regressed)** cleared two of those residual shapes at the same ctor site: (a) `_infer_binary_op_type` now types `& \| ^ << >>` so `vec2(iuv & 7)` (int-vector mask/quantize idiom) converts instead of casting; (b) new scalar-target branch in `_transform_vector_conversion_ctor` — `float/int/uint/bool(vecN)` → `.x` (+ scalar cast when base differs). Transformer-only, 12-shader blast radius, FIXED 4dfBWM 4lt3DH MdSfzt MdtBD8 Xl2fRw XtS3RW ldlcDn ldlfRM. N now **20** failing passes; remaining residual is macro-body ctors (J/V) + multi-blocker buffer passes (4ddcWf/4ltczj array-field, XlycWh→B, ld2BWW). **Session 30 (2026-07-09, +2 PASS, 0 regressed)** closed three type-inference gaps that dropped args to the invalid `(int2)(float2)` C cast: (a) `round`/`roundEven` are NATIVE OpenCL (no `GLSL_` prefix) → added to `vector_passthrough_functions` (Xs3fRB); (b) `_get_type_name` now types `IR.AssignmentOp` via its `.target` — `ivec2(o /= .7)` (4dSfWD); (c) new `_widest_vector_arg_type` — min/max/clamp/mix/step/smoothstep/pow/mod type from the widest (genType) arg, not `arguments[0]`, so `ivec3(step(scalar, vec3))` converts (4ljyRc). Transformer-only, 3-shader blast radius, FIXED 4ljyRc Xs3fRB (4dSfWD's N cast fixed but image unmasked L). Tests: +3 in `test_transformer_vector_conversion.py`. N now **18**. **Residual N is now dominated by `ivec2(U)` inside function-like `#define` bodies** (`#define T(U) texelFetch(chan, ivec2(U), 0)` — 3ds3RB MtSBWw tsjGRm WdBGRz + ld2BWW `ivec2(CELLS)`): `_transform_macro_body` rewrites `ivec2(`→`(int2)(` textually and can't safely emit `convert_int2` without arg-width info (`ivec2(scalar)` broadcast would break) — needs the J/V macro-expander, NOT a localized fix. No cheap AST-level N win remains. |
+| N | 61→**19** | 12 | compile | **DONE (Session 10, 2026-07-03, +23 PASS, 0 regressed).** Root cause: EVERY vector ctor emitted as C cast `(T)(...)`; OpenCL vector literals can't convert element types or truncate. Fix: `_transform_vector_conversion_ctor` in the ctor branch — `ivec2(v2)`→`convert_int2(v2)`, `vec3(v4)`→`.xyz`, bool masks →`convert_TN((m) & 1)` (vector relational = -1-for-true; `&1` normalizes). + `OPENCL_TO_GLSL_NAME` fix in `_infer_builtin_function_type` (params register OpenCL names; `TYPE_NAME_MAP.get('float3')` was silently None) + texture*→vec4 inference + typed comparison-lowering masks. **Residual 19 shaders:** ctor-in-`#define` (macro bodies untransformed — J/V family), scalar-from-vector `float(uvec3)` (GLSL takes .x — same site, scalar targets, ~6 shaders), untypeable args. **Session 21 (2026-07-09, +8 PASS, 0 regressed)** cleared two of those residual shapes at the same ctor site: (a) `_infer_binary_op_type` now types `& \| ^ << >>` so `vec2(iuv & 7)` (int-vector mask/quantize idiom) converts instead of casting; (b) new scalar-target branch in `_transform_vector_conversion_ctor` — `float/int/uint/bool(vecN)` → `.x` (+ scalar cast when base differs). Transformer-only, 12-shader blast radius, FIXED 4dfBWM 4lt3DH MdSfzt MdtBD8 Xl2fRw XtS3RW ldlcDn ldlfRM. N now **20** failing passes; remaining residual is macro-body ctors (J/V) + multi-blocker buffer passes (4ddcWf/4ltczj array-field, XlycWh→B, ld2BWW). **Session 30 (2026-07-09, +2 PASS, 0 regressed)** closed three type-inference gaps that dropped args to the invalid `(int2)(float2)` C cast: (a) `round`/`roundEven` are NATIVE OpenCL (no `GLSL_` prefix) → added to `vector_passthrough_functions` (Xs3fRB); (b) `_get_type_name` now types `IR.AssignmentOp` via its `.target` — `ivec2(o /= .7)` (4dSfWD); (c) new `_widest_vector_arg_type` — min/max/clamp/mix/step/smoothstep/pow/mod type from the widest (genType) arg, not `arguments[0]`, so `ivec3(step(scalar, vec3))` converts (4ljyRc). Transformer-only, 3-shader blast radius, FIXED 4ljyRc Xs3fRB (4dSfWD's N cast fixed but image unmasked L). Tests: +3 in `test_transformer_vector_conversion.py`. N now **18**. **Residual N is now dominated by `ivec2(U)` inside function-like `#define` bodies** (`#define T(U) texelFetch(chan, ivec2(U), 0)` — 3ds3RB MtSBWw tsjGRm WdBGRz + ld2BWW `ivec2(CELLS)`): `_transform_macro_body` rewrites `ivec2(`→`(int2)(` textually and can't safely emit `convert_int2` without arg-width info (`ivec2(scalar)` broadcast would break) — needs the J/V macro-expander, NOT a localized fix. No cheap AST-level N win remains. **Session 50 (2026-07-15, +2 PASS, 0 regressed)** re-opened N after the 999→1499 expansion (85 failing passes / 38 shaders). Clustered by error string: the dominant slice (~43 passes) is `invalid conversion between ext-vector 'intN'/'floatN'`, but it fragments — most live in the preprocessor `#if`/`#define` textual path (`ivec2(floor(x))` inside `#if 1` = ttcSD8; `T(U)`/`texel`/`pixel` function-like macro bodies = 3ds3RB tsjGRm wd2GRh wtVXDc …) which is the deferred J/V family. The clean AST slice: a vector ctor whose single arg is a binop with ONE untypeable operand — an object-like macro constant (`ivec2(fragCoord/scale)`, `#define scale 20.` survives as a bare identifier; ts3GzX, ltScRm). `_infer_binary_op_type` returns None when either operand is None → the ctor lost its arg type → invalid `(int2)(float2)` C cast. Fix: new `_vector_ctor_arg_type` fallback used ONLY by `_transform_vector_conversion_ctor` — if the arg is an arithmetic/bitwise BinaryOp whose overall type is unknown but exactly one operand is a proven vector, infer that vector's type. **NOT wired into `_infer_binary_op_type`**: its result also feeds the multi-arg truncation budgeter (`_truncate_overflow_ctor_args`), which over-counts when a flat-`local_types` entry is a stale vector (a global `float p` shadowed by a later fn's `vec2 p` param) → a global change REGRESSED 3djcRW (`vec3(ab, sin(PI/p), 0.)` dropped `0.`). The scoped fallback is 0-regress by construction (fires only when one operand is a GENUINE vector, so `vec op x` is a vector of that shape regardless of the stale partner). Hash blast radius = 4 shaders, 2 flipped (WdfBDj/ws2fzz carry other blockers — K-VLA/A/C/AJ — despite their mis-`*`). Tests: +4 in `test_transformer_vector_conversion.py`. N now **75 failing passes**. **Residual N is dominated by the preprocessor macro-body ctors (J/V family) + multi-blocker buffer passes** — no further cheap AST-level N win; the remaining big win needs the macro-expander. |
 | K | 47→**13** | 4 | both | **DONE (Session 11, 2026-07-03, +18 PASS, 0 regressed).** Five sub-shapes: (1) struct ctor rvalue emitted as bare `{...}` → now C99 compound literal `((S){...})` in expression position, brace list kept in decl-init (`_braced_args`/`_emit_initializer`, BOTH emitters); (2) array ctor `T[N](...)` → new `IR.ArrayConstructor` (decl-init `{...}`, expr `((T[]){...})`, size discarded); (3) type-first decls `float[4] p` + unsized `T[](` → `_normalize_array_syntax` pre-parse rewrite in glsl_parser.py; (4) array params `vec3 pts[4]` lost name → `Parameter.array_suffix`, out-arrays skip pointer machinery; (5) struct array fields → accepted in `_transform_struct_specifier`. Probe proved compound literals + program-scope globals compile in campaign build mode (NO -cl-std; would fail under explicit CL1.2). **Residual 13 shaders / 4 sole (MdSfWc MsVBzW XsBczV ldjBRy):** misattributed tree-sitter ParseErrors from macro abuse — really G/P family, not K. |
 | S | 40→**0** | 0 | transpile | **DONE (Session 12, 2026-07-05, +16 PASS, 0 regressed). S is off the board.** Two coupled bugs: (1) function prototypes (`float Fn (vec3 p);` — the dr2-shader idiom) parse as `declaration`+`function_declarator`, which `_transform_declaration` rejected → new `_transform_function_prototype` emits `__attribute__((overloadable)) sig;` (attr must match definition) + pre-registers return type & out-param signature for call-before-definition; (2) `extract_main_image_sections` (tests/transpile.py) DROPPED all code after mainImage — exactly where prototype shaders put their definitions (fix 1 alone = +1, "Unresolved extern"). Post-main code now kept; mainVR/mainSound/mainCubemap excluded ONLY after mainImage (before it they're real callees — XlBGzm/lsVBDh/XscXzn call mainVR from mainImage; blanket-drop regressed 3, caught by full re-test, fixed). Residual: 20 ex-S shaders unmasked downstream (G/F/B/P/H/C/E/A). |
 | O | 47→**1** | 0 | compile | **DONE (Session 13, 2026-07-05, +19 PASS, 0 regressed).** Root cause: GLSL `v1==v2`/`v1!=v2` on vectors are AGGREGATE comparisons yielding scalar bool; transpiler emitted OpenCL component-wise masks → invalid in `if`/ternary/`&&`/`return`/bool-init. Fix at the PRODUCER in `_transform_binary_expression`: vector `==` → `all(l==r)`, `!=` → `any(l!=r)` (typed bool; relational -1-for-true sets the MSB all/any test). lessThan/equal builtin masks untouched (constructed directly in `_transform_call_expression`). No emitter change. **Residual 1 (ls2GWc):** really G — the `if(mask)` sits inside `#if 1`, handled by the `post_process_ifdef_blocks` regex path, never transformed. Other ex-O strays re-tagged by re-test: MtSBWw/WdBGRz→N, MsBczy/MsGfz1/lsXyRS/tsfGW4→G/P, lstXzs→P + int-vector GLSL_clamp overloads missing in glslHelpers.h (float-only; live-editable cheap win). |
@@ -384,7 +494,7 @@ Status legend: `TODO` · `IN-PROGRESS` · `DONE` · `BLOCKED-ON-HOUDINI` ·
 | Y | 1 | — | compile | user `#define` clobbers IMX struct member (`#define resolution …`). |
 | AG | 5→**1** | — | compile | **Cluster 1 DONE (Session 48, 2026-07-14, +2 PASS, 0 regressed — owner-approved two-branch experiment).** Fix = transpiler-side **undef/re-define push-pop** (`src/glsl_to_opencl/preprocessor/uniform_redefine.py`, wired into BOTH hosts → live Houdini needs no HDA change): object-like non-bare-identifier `#define` of a uniform gets `#undef` at end of emitted header (un-poisons SHADERTOY_INPUTS) + its final definition RE-EMITTED at top of the kernel glue (entry body is inlined AFTER SHADERTOY_INPUTS — plain #undef was compile-correct but render-wrong). Function-like + bare-identifier-body defines exempt (bare-ident gate is load-bearing: MsXfD7/lslXW8 PASS through that pattern). FIXED XdyBW1 MtXBDf; ldsBWl AG-error gone → unmasked A/C. Tests +13; blast radius exactly 6 shaders. **Rejected-but-proven alternative:** header-side `shadertoy_bind_inputs()` setter (branch `fix/header-ag1-setter-main`, 5c379d93; full 862-PASS-set re-test, 0 regressed) — root-cause fix to adopt when the HDA code_header is restructured; **implementation + adoption steps embedded at the bottom of `houdini/ocl/include/shadertoyInputs.h`**. Original investigation verdict (S48 first half): "expression is not assignable". INVESTIGATE-FIRST (per S48 brief) found the 3 sole-blockers are **two distinct PREPROCESSOR root causes, neither the hoped-for localized swizzle-lvalue emitter bug** → escalated, not implemented. **Cluster 1 — user `#define`s a read-only Shadertoy uniform (XdyBW1, MtXBDf → +2):** XdyBW1 has `#define iTime GLSL_mod(iTime,20.0f)` (loop-every-20s hack), MtXBDf has `#define iFrame (int)(texelFetch(iChannelN,…).w)` in all 4 buffers. On Shadertoy these are legal (`iTime`/`iFrame` are read-only *uniforms* — the `#define` remaps reads only). In our output they're **lvalues**: the HDA-owned `SHADERTOY_INPUTS` macro (`main_header.cl` ~line 1446-1448) does `iTime = AT_Time;`/`iFrame = AT_iFrame;`, and the user macro rewrites the LHS → `GLSL_mod(iTime,20.0f) = AT_Time;`. **Proposed design (needs approval — a redesign, risks regressing passing shaders that read these uniforms):** S41/S43-style pre-parse pass — detect `#define <U> <body>` for U ∈ {iTime,iFrame,iResolution,iMouse,iDate,iChannelTime,iTimeDelta,iFrameRate,iChannelResolution}; rename macro→`<U>_st` keeping `<body>` verbatim (its inner U stays = real uniform, safe since the assignment lives outside user text in main_header.cl); rewrite every OTHER whole-word user-code occurrence of U after the `#define` to `<U>_st`. Edge cases (occurrences before the define, U inside other macro bodies) = why it's not a clean localized win. **Cluster 2 — macro-expander token-paste (4dsfRn → +1, category-G):** `#define T(u,v) +texture(iChannel0,U/R+vec2(u-1,v-1)/R)` called `T(-, )` should expand `u-1`→`- -1` but the S24 expander emits `--1` (missing token separator) → clang reads pre-decrement of rvalue `1`. Fix = insert a space at param-substitution token boundaries in the S24 expander (the gated pre-parse path the traps flag as risky). (Other 2 tags ldsBWl/ltKSRG carry additional blockers — A/vector-conv — not sole.) |
 | AH | 3→**2** | — | compile | **DONE (Session 47, 2026-07-13, +1 PASS, 0 regressed).** A GLSL struct DEFINITION carrying a trailing variable — `struct positionStruct { … } pos;` — parses as a `declaration` whose `type` field is a named `struct_specifier` (with a `field_declaration_list`), NOT the bare top-level `struct_specifier` that `_transform_struct_specifier` already typedef's. The old `_transform_declaration` passed the whole `struct Name {…}` text through as the variable's `type_name` → emitted a bare `struct` tag with no typedef AND never registered the struct → later bare-name uses (`positionStruct pos` as param/return/decl) are invalid C: *"must use 'struct' tag to refer to type 'positionStruct'"*. Fix (transformer-only, `ast_transformer.py`): when a declaration's type is a named struct_specifier with a field list, route it through `_transform_struct_specifier` (emits `typedef struct {…} Name;`, registers `struct_types`+`type_map`), retype the variable(s) to the bare struct name, and return `[StructDefinition, Declaration]`; the file-scope `transform()` loop and `_transform_compound_statement` now flatten a list return into siblings. Bonus: the struct is now registered → member-access inference works for `pos`. **Hash blast-radius rig: exactly 1 pass changed (MstBWs image), 0 others** → 0-regress by construction. Tests: `test_transformer_structs.py` +2 (trailing-var single + comma-multi). **FIXED 1 (sole):** MstBWs. **PASS 861→862.** **Residual 2 (4sSXWt, 4stSRf) are mis-tags** — hash rig shows their output UNCHANGED by this fix; their "must use 'struct' tag" errors come from a different construct (independent blockers), do NOT chase under AH. |
-| AI | 3 | — | compile | S39 (ex-UNKNOWN): member/swizzle access on a non-struct scalar or array (type-inference collapse — MlySRh; PrintState font idiom Md2fzV/ldKcz3 also carry B). |
+| AI | 3→**2** | — | compile | **DONE (Session 49, 2026-07-15, +1 PASS, 0 regressed).** Sole-blocker MlySRh: the source is `vec3(linearstep(0.,2.,grids.y))` — NOT a source `.xyz` swizzle (the S48 brief mis-described it). `linearstep` is a user fn with THREE type-overloads (`float`/`vec2`/`vec4`), which `user_function_return_types` collapses to ONE (last def wins → vec4). So the call mis-infers as vec4, and the category-N ctor lowering (`_transform_vector_conversion_ctor`) takes the width>target truncation path `vec3(v4)→v4.xyz` — emitting `linearstep(...).xyz` on a value that is actually a *scalar* → clang "member reference base type 'float' is not a structure or union". **Fix (transformer-only, same untrustworthy-width precedent as AF's `_truncate_overflow_ctor_args`):** pre-scan collects `overloaded_return_type_fns` (names with ≥2 defs of differing return type); `_transform_vector_conversion_ctor` bails (returns None → plain broadcast cast `(float3)(...)`) when the arg's width traces to one (new walker `_expr_type_uses_overloaded_fn`). `(float3)(scalar)` broadcasts correctly; identity for a same-type vector. Guard is narrow — NON-overloaded `vec3(vec4Fn())` still truncates to `.xyz`. **Hash blast-radius rig: exactly 1 pass changed (MlySRh image), 0 others** → 0-regress by construction. Tests: `test_transformer_scalar_broadcast_ctor.py` +3 (overloaded-broadcast, non-overloaded-truncates guard, plain-local-truncates guard). **FIXED 1 (sole):** MlySRh. **PASS 864→865.** **Residual 2 (Md2fzV, ldKcz3) are the PrintState font idiom + also carry B** — NOT sole, do not chase under AI. |
 
 ---
 

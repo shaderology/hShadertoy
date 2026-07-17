@@ -270,6 +270,196 @@ class PreprocessorTransformer:
         # (they're less common in preprocessor directives)
         return line, ''
 
+    # Category E (Session 53) — literal matrix-ctor multiplication wrap.
+    _MAT_CTOR_RE = re.compile(r'\bGLSL_mat[234]\s*\(')
+
+    @staticmethod
+    def _balanced_paren_end(s: str, open_idx: int) -> int:
+        """Index just past the ')' matching the '(' at open_idx, or -1."""
+        depth = 0
+        for i in range(open_idx, len(s)):
+            if s[i] == '(':
+                depth += 1
+            elif s[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+        return -1
+
+    @staticmethod
+    def _scan_operand_left(s: str):
+        """Start index of the multiplication operand ENDING at s's end —
+        an identifier / call / paren-group / cast / subscript chain like
+        `p.xy`, `(p)`, `rot2(a)`, `(float2)(t, t)`, `arr[i].xy` — or None.
+        """
+        i = len(s)
+        while True:
+            if i > 0 and s[i - 1] == ')':
+                # One or more juxtaposed paren groups (a cast `(T)(args)` is
+                # two): consume balanced groups right-to-left.
+                while i > 0 and s[i - 1] == ')':
+                    depth = 0
+                    j = i - 1
+                    while j >= 0:
+                        if s[j] == ')':
+                            depth += 1
+                        elif s[j] == '(':
+                            depth -= 1
+                            if depth == 0:
+                                break
+                        j -= 1
+                    if j < 0 or depth != 0:
+                        return None
+                    i = j
+                # Optional callee/type identifier hugging the '('.
+                k = i
+                while k > 0 and (s[k - 1].isalnum() or s[k - 1] == '_'):
+                    k -= 1
+                i = k
+            elif i > 0 and s[i - 1] == ']':
+                depth = 0
+                j = i - 1
+                while j >= 0:
+                    if s[j] == ']':
+                        depth += 1
+                    elif s[j] == '[':
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    j -= 1
+                if j < 0 or depth != 0:
+                    return None
+                i = j
+                continue  # the array name precedes the subscript
+            elif i > 0 and (s[i - 1].isalnum() or s[i - 1] == '_'):
+                k = i
+                while k > 0 and (s[k - 1].isalnum() or s[k - 1] == '_'):
+                    k -= 1
+                i = k
+            else:
+                return None
+            # A '.' chains another unit to the left (member/swizzle base).
+            if i > 0 and s[i - 1] == '.':
+                i -= 1
+                continue
+            return i
+
+    @staticmethod
+    def _scan_operand_right(s: str):
+        """End index (exclusive) of the multiplication operand STARTING at
+        index 0 of s — mirror of _scan_operand_left — or None."""
+        i = 0
+        n = len(s)
+        while True:
+            if i < n and s[i] == '(':
+                # One or more juxtaposed paren groups (cast syntax is two).
+                while i < n and s[i] == '(':
+                    end = PreprocessorTransformer._balanced_paren_end(s, i)
+                    if end < 0:
+                        return None
+                    i = end
+            elif i < n and (s[i].isalpha() or s[i] == '_'):
+                while i < n and (s[i].isalnum() or s[i] == '_'):
+                    i += 1
+                if i < n and s[i] == '(':
+                    end = PreprocessorTransformer._balanced_paren_end(s, i)
+                    if end < 0:
+                        return None
+                    i = end
+            else:
+                return None
+            if i < n and s[i] == '[':
+                depth = 0
+                j = i
+                while j < n:
+                    if s[j] == '[':
+                        depth += 1
+                    elif s[j] == ']':
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    j += 1
+                if j >= n:
+                    return None
+                i = j + 1
+            if i < n and s[i] == '.':
+                i += 1
+                continue
+            return i
+
+    def _wrap_matrix_ctor_muls(self, body: str) -> str:
+        """Wrap `X *= GLSL_matN(...)`, `X * GLSL_matN(...)` and
+        `GLSL_matN(...) * X` in GLSL_mul when the partner operand is a simple
+        expression unit. The literal constructor is positive matrix evidence;
+        anything ambiguous (operator chains `a/b*M`, unusual operands) is left
+        untouched — this pass runs on EVERY #define body and #if-block line,
+        so it must never rewrite something it cannot prove."""
+        for _ in range(16):  # bounded; each edit consumes one ctor adjacency
+            edited = self._wrap_one_matrix_ctor_mul(body)
+            if edited is None:
+                return body
+            body = edited
+        return body
+
+    def _wrap_one_matrix_ctor_mul(self, body: str):
+        """Apply the first provable wrap; return the new body or None."""
+        for m in self._MAT_CTOR_RE.finditer(body):
+            c_start = m.start()
+            c_end = self._balanced_paren_end(body, m.end() - 1)
+            if c_end < 0:
+                continue
+            ctor = body[c_start:c_end]
+            left = body[:c_start].rstrip()
+
+            # ---- X *= GLSL_matN(...) --------------------------------------
+            if left.endswith('*='):
+                tail = body[c_end:].lstrip()
+                # The ctor must BE the whole RHS: a statement/expression
+                # boundary may follow (`;`, `}`, `,`, `)`, end), but any
+                # operator continuation (`*= M * 2.`) is not provable.
+                if tail and tail[0] not in ';,)}':
+                    continue
+                lhs_region = left[:-2].rstrip()
+                lv_start = self._scan_operand_left(lhs_region)
+                if lv_start is None:
+                    continue
+                before = lhs_region[:lv_start].rstrip()
+                if before.endswith(('*', '/', '%', '.')):
+                    continue
+                lv = lhs_region[lv_start:]
+                return (body[:lv_start] + f"{lv} = GLSL_mul({lv}, {ctor})"
+                        + body[c_end:])
+
+            # ---- X * GLSL_matN(...) ---------------------------------------
+            if left.endswith('*') and not left.endswith(('**', '*=')):
+                lop_region = left[:-1].rstrip()
+                lop_start = self._scan_operand_left(lop_region)
+                if lop_start is None:
+                    continue
+                before = lop_region[:lop_start].rstrip()
+                if before.endswith(('*', '/', '%', '.')):
+                    continue
+                lop = lop_region[lop_start:]
+                return (body[:lop_start] + f"GLSL_mul({lop}, {ctor})"
+                        + body[c_end:])
+
+            # ---- GLSL_matN(...) * X ---------------------------------------
+            # Guard: a `*`/`/` clinging to the ctor's LEFT would change
+            # associativity (`a / M * v` is `(a/M)*v`, not `a/(M*v)`).
+            if not left.endswith(('*', '/', '%', '.')):
+                rest = body[c_end:]
+                stripped = rest.lstrip()
+                if stripped.startswith('*') and not stripped.startswith(('**', '*=')):
+                    rop_region = stripped[1:].lstrip()
+                    rop_end = self._scan_operand_right(rop_region)
+                    if rop_end is None:
+                        continue
+                    rop = rop_region[:rop_end]
+                    consumed = len(rest) - len(rop_region) + rop_end
+                    return (body[:c_start] + f"GLSL_mul({ctor}, {rop})"
+                            + body[c_end + consumed:])
+        return None
+
     def _transform_code_line(self, line: str) -> str:
         """
         Transform a code line (non-preprocessor line inside conditional blocks).
@@ -336,6 +526,16 @@ class PreprocessorTransformer:
         for glsl_type in self.matrix_types:
             pattern = r'(?<!GLSL_)\b' + re.escape(glsl_type) + r'\s*\('
             body = re.sub(pattern, f'GLSL_{glsl_type}(', body)
+
+        # Step 1a-2 (category E, Session 53): wrap a `*`/`*=` whose operand is
+        # a literal GLSL_matN(...) constructor in the overloadable GLSL_mul.
+        # These textual regions never reach the AST matmul lowering, so
+        # `v *= mat2(...)` / `(p)*mat2(...)` inside a #define body (or a #if
+        # block line that later falls back to raw text) stayed a raw struct
+        # multiply. The literal ctor is positive matrix evidence — GLSL_mul
+        # has NO vec·vec/scalar·scalar overload, so wrapping without it is
+        # forbidden. Runs right after Step 1a (ctors are GLSL_matN( now).
+        body = self._wrap_matrix_ctor_muls(body)
 
         # Step 1b: Transform scalar type constructors to cast syntax
         # float(x) -> (float)(x), int(x) -> (int)(x), etc. (category V)

@@ -48,6 +48,12 @@ class ASTNode:
         return self._node.end_point
 
     @property
+    def has_error(self) -> bool:
+        """True if this node's subtree contains a parse error (tree-sitter
+        error recovery). Used to gate AST routing of #if-block contents."""
+        return self._node.has_error
+
+    @property
     def children(self) -> List['ASTNode']:
         """Child nodes (wrapped)."""
         return [wrap_node(child, self._source) for child in self._node.children]

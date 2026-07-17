@@ -2601,3 +2601,401 @@ cheap AST-level N win left.
   category-G/S24) still open — design in the AG BACKLOG row.
 - **PASS 862 → 864/999.** Commit: fix/transpiler-ag1-undef-main merge +
   0ade4bc3 (in-code design docs).
+
+---
+
+## Session 49 — category AI: `vecN(overloadedUserFn(...))` scalar broadcast (2026-07-15)
+
+- **Target:** sole-blocker **MlySRh** (8x Multi-Graphing). The S48 brief
+  predicted a *source* `.xyz`-on-scalar swizzle needing a broadcast-lowering
+  emitter fix. **The brief mis-read it.** The actual source is
+  `vec3(linearstep(0.,2.,grids.y))` — a plain vec3 constructor around a scalar.
+  `.xyz` is the TRANSPILER'S OWN output, from the category-N ctor truncation.
+- **Root cause:** `linearstep` is a user fn with three TYPE-overloads
+  (`float f(float,float,float)` + `vec2 f(vec2…)` + `vec4 f(vec4…)`).
+  `user_function_return_types` keeps ONE type per name (last def wins → vec4),
+  so the call `linearstep(0.,2.,grids.y)` mis-infers as vec4. In
+  `_transform_vector_conversion_ctor` (category N) that hits the
+  `arg_width(4) > target_width(3)` branch → truncation `vec3(v4)→v4.xyz`,
+  emitting `linearstep(...).xyz`. At runtime the float overload is selected,
+  so `.xyz` swizzles a scalar → clang *"member reference base type 'float' is
+  not a structure or union"*. Same untrustworthy-overloaded-width class that
+  AF's `_truncate_overflow_ctor_args` already guards against via
+  `_expr_type_uses_user_fn`.
+- **Fix (transformer-only, `ast_transformer.py`):** a pre-scan
+  (`_collect_function_renames`) now also collects `overloaded_return_type_fns`
+  — user fns with ≥2 definitions of DIFFERING return type (order-independent).
+  `_transform_vector_conversion_ctor` bails early (returns None → caller emits
+  the plain broadcast cast `(float3)(...)`) when the single arg's width traces
+  to such a fn, via a new spine-walker `_expr_type_uses_overloaded_fn` (mirrors
+  `_expr_type_uses_user_fn`). `(float3)(scalar)` broadcasts correctly and is an
+  identity for a same-type vector. The guard is deliberately NARROW: a
+  NON-overloaded `vec3(getColor())` returning vec4 still truncates to `.xyz`
+  (width is trustworthy), and a plain `vec3(v4_local)` is untouched.
+- **Unit tests:** `tests/unit/test_transformer_scalar_broadcast_ctor.py` (+3):
+  overloaded-scalar-call broadcasts (no `.xyz`); non-overloaded vec4 fn still
+  truncates; plain `vec3(v4_local)` still truncates. Suite **2093 passed + 6
+  skipped** (2090 + 3). No existing test changed.
+- **Corpus:** hash blast-radius rig (main-wt HEAD vs working tree, shared
+  cache, 1406 passes) → **exactly 1 pass changed: MlySRh image; 0 others** →
+  0-regress by construction. Delta (ledgers direct): **864 → 865, FIXED
+  MlySRh (sole target), REGRESSED 0.** houdini_smoke exit 0 + rc.py smoke
+  SMOKE OK (both run from the MAIN tree on the branch).
+- **Residual AI: 2** (Md2fzV, ldKcz3) = the PrintState font idiom and also
+  carry B — NOT sole, do not chase under AI.
+- **PASS 864 → 865/999.** Branch: `fix/transpiler-ai-scalar-broadcast`.
+
+## Mass-test EXPANSION — selection sessions 11–15 (+500 shaders) (2026-07-15)
+
+**Measurement only — zero transpiler edits this session.** This closes the
+original **999-shader arc** and grows the corpus. Ran the `tests/campaign/`
+fetch→test→report loop for `selection.json` batches 11–15 (100 ids each, oldest
+-first sampling), spending 498 of 1500 monthly API calls (session 11 had 2
+cache hits; 1002 remaining).
+
+- **999-shader arc, closed:** the fix campaign took it from **baseline 413/999
+  → 865/999** across Sessions (fix-work) 1–49 (2026-06-23 → 2026-07-15), 0
+  regressions. That denominator is now historical.
+- **New corpus totals: 1289 / 1499 PASS** (86.0%). Per new session (pass/100):
+  S11 87, S12 85, S13 85, S14 83, S15 84 → **424/500** on the newer (still
+  oldest-half) shaders — consistent with the 1–10 range (81–91), no cliff.
+- **Classifier (`classify.py`) — the ONE code file touched this session.**
+  Triaged every UNKNOWN to empty after each report. Two NEW categories +
+  three broadened rules (all retroactively re-bucketed via `reclassify`):
+  - **AJ** (new): int/float mismatch where an integer is required — scalar
+    binary op (`2 << -GLSL_floor(23.f)`, ttfGRB) or array subscript
+    (`arr[9*GLSL_min(state,1)+n]`, WsG3zz).
+  - **AK** (new): pointer address-space mismatch — a `__global` global-scope
+    array/struct passed to a user fn whose pointer/array param is private/
+    generic (`InitLight(LIGHT all_light[N_LIGHTS])`, tsjyDG). "changes address
+    space of pointer".
+  - **K** broadened: `array initializer must be an initializer list` (array-to-
+    array copy `float2 cp[4]=eps;`, ttsXW7) + a source-fallback for a GLSL
+    `T[N](...)` constructor clang leaves unechoed on huge initializer lines
+    (`int voxels[1840]=int[1840](...)`, MlBfRV).
+  - **W** broadened: `no matching function for call to 'GLSL_<builtin>'` (a bvec
+    condition into `GLSL_mix` via an `If` macro, 3lc3zj) — was ambiguous-only;
+    GLSL_mat* stays with C via negative lookahead.
+  - **H** broadened: `invalid argument type 'matrixNxM' to unary expression`
+    (unary `-mat2`, wdjcRm) — matrix struct has no operators, unary or binary.
+- **Data written** (all generator-owned, never hand-edited): `ledger.json`,
+  `REPORT.md`, `failures.csv`, `selection.json` (unchanged), `api_budget.json`,
+  new `cache/*.json` + `artifacts/<id>/` for the 500 ids.
+- **Next fix target is unchanged: Session 50 = category N** (now the largest
+  bucket by far at 38 shaders / 85 failing passes). See NEXT_SESSION.md.
+
+## Session 50 — category N: vecN ctor arg is a binop with an untypeable operand (2026-07-15)
+
+- **Target:** the re-opened N cluster (85 failing passes / 38 shaders after the
+  999→1499 expansion). Clustered the sole-blockers by error string: the
+  dominant `intN↔floatN` slice (~43 passes) **fragments by ROOT CAUSE**, not by
+  error text. Most live in the preprocessor `#if`/`#define` textual path —
+  `ivec2(floor(x))` inside `#if 1` (ttcSD8), and `T(U)`/`texel`/`pixel`
+  function-like macro bodies (3ds3RB, tsjGRm, wd2GRh, wtVXDc, …) — which is the
+  deferred **J/V macro-expander family**, not a localized AST fix.
+- **The clean AST slice:** a vector ctor whose single argument is a binary op
+  with ONE untypeable operand — an object-like macro constant. `#define scale
+  20.` survives as a bare identifier (object macros aren't inlined), so
+  `ivec2(fragCoord / scale)` = `ivec2(float2 / <unknown>)`.
+  `_infer_binary_op_type` returns None whenever EITHER operand is None → the
+  category-N conversion ctor lost its arg type → fell back to the invalid
+  `(int2)(float2)` C cast ("invalid conversion between ext-vector type"). ts3GzX
+  (`#define scale 20.`), ltScRm (`#define TILE_SIZE …`).
+- **Fix (transformer-only, `ast_transformer.py`):** new `_vector_ctor_arg_type`
+  used ONLY by `_transform_vector_conversion_ctor`. When `_get_type_name(arg)`
+  is None but the arg is an arithmetic/bitwise `BinaryOp` with exactly one
+  operand a proven vector, infer that vector's type (GLSL broadcast /
+  componentwise preserves the vector's width AND base) → the ctor emits
+  `convert_int2(...)`.
+- **Why NOT `_infer_binary_op_type` (the regression story):** a first cut
+  broadened `_infer_binary_op_type` itself. Its result also feeds the multi-arg
+  truncation budgeter (`_truncate_overflow_ctor_args`), which counts each arg's
+  component width. **REGRESSED 3djcRW:** `vec3(ab, sin(PI/p), 0.)` where `p` is
+  a global `float p = 3.` but the FLAT `local_types` map is stale-set to
+  `float2` by a later function's `vec2 p` PARAMETER (the known scoping trap).
+  `PI/p` then mis-inferred `float2` → `sin(PI/p)` counted as 2 comps →
+  `1+2+1 > 3` overflow → truncation dropped the real `0.` arg → "too few
+  elements". The scoped fallback avoids this because the conversion decision is
+  safe even with a stale partner (`vec op x` is a vector of the GENUINE vector's
+  shape), while the truncation budgeter never sees the new inference.
+- **Unit tests:** `tests/unit/test_transformer_vector_conversion.py` (+4):
+  div-by-macro-constant, macro×vec (unknown on the left), int-vec−macro base
+  change, and a `mat*unknown`-stays-uninferred guard. Suite **2097 passed + 6
+  skipped** (2093 + 4). No existing test changed.
+- **Corpus:** hash blast-radius rig (main-wt HEAD vs working tree, shared cache,
+  2171 passes) → **exactly 4 shaders changed** (WdfBDj, ltScRm, ts3GzX, ws2fzz),
+  0 new transpile errors. Re-tested those + the 3 transiently-touched ids
+  `--force`. Delta (ledgers direct): **1289 → 1291, FIXED ltScRm + ts3GzX,
+  REGRESSED 0.** WdfBDj/ws2fzz changed but still carry other blockers (K-VLA /
+  A / C / AJ) despite their mis-`*` stars — the classifier stars were
+  unreliable here as usual. houdini_smoke exit 0 + `rc.py smoke` SMOKE OK (both
+  from the MAIN tree on the branch).
+- **Residual N (75 failing passes):** dominated by the preprocessor macro-body
+  ctors (J/V) + multi-blocker buffer passes. No further cheap AST-level N win —
+  the remaining bulk needs the macro-expander subsystem (owner-approval item).
+- **PASS 1289 → 1291/1499.** Branch: `fix/transpiler-n-binop-untyped-operand`.
+
+## Session 51 — category A residual: uninit-matrix + non-const-int global hoisting (2026-07-15)
+
+- **Target:** the A residual the 999→1499 expansion re-opened (A was DONE in
+  Session 8 — the structural hoisting subsystem — but 29 shaders still hit
+  "initializer element is not a compile-time constant"). Owner-approved **A3 +
+  A1 together** (both are completeness gaps in the S8 hoisting, no new
+  mechanism); A2 (array/aggregate element-wise hoisting) deferred to its own
+  structural session.
+- **Root-caused the residual into three clusters** (read `corpus.py list A`
+  error lines + sources): **A3 — uninitialized matrix globals** (`mat3 obj;`,
+  `mat2 ma,mb;`): the synthesized zero-init `_create_zero_initializer` returns
+  is a CALL `GLSL_matrixNxN_diagonal(0.0f)`, and that branch NEVER passed
+  through the hoisting check → emitted as a file-scope initializer → rejected
+  (the largest cluster, ~17 shaders). **A1 — non-const scalar int/uint globals**
+  (`const int n = int(k);`, `int tot_n = N.x*N.y;`): the hoist guard skipped ALL
+  int/uint (`opencl_type not in ('int','uint')`) on the array-size theory, but
+  these are non-foldable (3 shaders). **A2 — array/aggregate globals with
+  non-const elements** (`Mat mats[5]={...}`, `float3 positions[]={...cos...}`):
+  blocked by the array guard because whole-array assignment is illegal — needs
+  element-wise hoisting, a NEW mechanism → deferred.
+- **Fix (transformer-only, `ast_transformer.py`):**
+  1. **A3:** in the no-initializer branch of `_transform_declaration`, route the
+     synthesized zero-init through the SAME hoisting predicate — hoist when
+     global + non-array + `not _is_ct_constant(init)`. Scalar/vector zero-inits
+     are literals (ct-const) and stay; only call-valued (matrix) zero-inits
+     hoist. Arrays keep their ArrayInitializer (unchanged).
+  2. **A1:** drop the blanket int/uint skip; hoist an int/uint global iff
+     `not _is_ct_constant` AND `not _is_int_foldable`. New `_is_int_foldable`
+     helper = a precise integer-constant-expression predicate (int/bool
+     literals, unary/paren/binary of foldable operands, refs to kept int
+     globals in the new `self._const_int_globals` set, `int(<foldable>)` casts).
+     A float literal, call, **vector member access** (`N.x` — not folded even on
+     a const vector), subscript, or ref to a hoisted global ⇒ not foldable ⇒
+     hoist. Pure int arithmetic of constants (`N*2`, a possible array size)
+     stays → **zero-regression by construction.** Kept int/uint globals are
+     recorded in `_const_int_globals` (reset per `transform()`).
+- **Unit tests:** `test_transformer_global_init_hoisting.py` (+6): uninit
+  mat3/mat2-list hoisted, uninit scalar NOT hoisted; int-cast-of-hoisted-float
+  and vector-member-product hoisted; foldable `N*2` and literal `3+4` NOT
+  hoisted (the regression guards). Suite **2104 passed + 6 skipped** (2097 + 7,
+  one pre-existing test file already had the matrix-explicit-init case).
+- **Corpus:** hash blast-radius rig (main-wt HEAD vs working tree, shared cache,
+  1503 shaders) → **exactly 27 changed**; 4 of them were baseline-PASS
+  (4ljyRc, 4tVcDK, Wt2GWG, wsffDn) — all re-tested, **stayed PASS**. Re-tested
+  all 27 `--force` in batches (heavy raymarchers time out past ~8 at once).
+  Delta (ledgers direct): **1291 → 1303, +12, REGRESSED 0.** FIXED: 3lBSRm
+  3sXcRl MlyXDV Msd3DN WsjyRz XdGSRD XllGDr XsycRh XtycRK ldsBWl llXXz4 (A3,
+  11) + 4t3czB (A1, 1). Several more had their A error resolved but unmasked a
+  downstream blocker (3sXyz4→AK/B/N/W, WsSczh→N, XtlfWs→N, ws2fzz→AJ/UNKNOWN).
+  houdini_smoke exit 0 + `rc.py smoke` SMOKE OK (both from MAIN tree on branch).
+- **Residual A (18 shaders):** now dominated by **A2 — array/aggregate globals
+  with non-const elements** (3ld3WX WlK3Rd tl2XzG 3sscDj Mlcczs + matrix-array
+  4lXGRl 4tlGDM MsV3WW ldScDt XsK3R3 4lfcRH 4tdBWf 3dK3zR). Whole-array
+  file-scope init is illegal; the fix is bare-sized-array + per-element
+  assignment hoisting (compound-literal for struct elements) — a NEW structural
+  mechanism, NEEDS-APPROVAL. Full design + example shaders in the A BACKLOG row.
+- **PASS 1291 → 1303/1499.** Branch: `fix/transpiler-a-residual-hoist`.
+
+## Session 52 — category A2: array/aggregate globals with non-const elements (2026-07-15)
+
+- **Target:** the last A residual — program-scope arrays whose element
+  initializers contain arithmetic/calls (`Mat mats[5] = {{(float3)(1)*0.9f,
+  ...}}`, `const float3 positions[] = {...spacing*GLSL_cos(quarterPi)...}`,
+  unsized `[]`, and the synthesized `{GLSL_matrixNxN_diagonal(0.0f)}` wrap on
+  uninitialized matrix arrays). Whole-array assignment is illegal in C, so the
+  S8 scalar hoist channel could not carry them (the `'[' not in var_name`
+  guard). NEEDS-APPROVAL → owner approved a **two-branch race** (S38 precedent).
+- **Pre-work (orchestrator):** 11 pyopencl compile probes on the campaign
+  device (RTX 2070, no -cl-std) proved BOTH mechanisms: (a) bare mutable
+  program-scope arrays + per-element assignment (incl. struct compound-literal
+  `mats[0] = (Mat){...}`), and (b) LOCAL arrays accept non-constant aggregate
+  initializers (C99) → temp-local + copy-loop. Also proved: all-constant
+  aggregate arrays already compile at file scope (must stay untouched),
+  `sizeof()` folds on a bare global array, zero-init reads, decl-order deps.
+- **The race:** two worktree-isolated Opus agents off main HEAD d2785a8d.
+  - **Plan A `fix/transpiler-a2-element-assign` (per-element assignment):
+    +7** (1303→1310), 0 regressed, suite 2110+6. Lost on the three matrix
+    arrays sized by `#define` constants (`carMat[NCAR]`, `pngMat[N_PENG]`,
+    `bonesWorld[BONES]`) — per-element unrolling needs a literal count.
+    Discarded.
+  - **Plan B `fix/transpiler-a2-temp-copy` (temp-array + copy-loop): +10**
+    (1303→1313), 0 regressed, suite 2112+6. **MERGED** (5106f1fd, fix commit
+    98d8f05a). Symbolic sizes work because the size text (`N`, `NCAR`) is
+    reused verbatim as the temp decl size + loop bound, still in scope at
+    kernel-body time; the single-element zero-wrap is legal on a local and C
+    tail-zero-fill covers the rest.
+- **Winning fix (Plan B):** `HoistedArrayInit(base_name, elem_type, size_text,
+  init_ir)` namedtuple rides the SAME ordered `hoisted_global_inits` channel
+  (decl-order deps preserved); `_is_ct_constant` now recurses into
+  `ArrayInitializer.elements`; `_hoist_array_global` extracts/derives the size
+  (unsized `[]` → element count) and returns the sized bare declarator; both
+  explicit-init and synthesized-zero-init paths route arrays through it. Hosts
+  (`tests/transpile.py` + `houdini/.../transpile_glsl.py`) render
+  `{ T __init_x[N] = <init>; for (int __hi=0;__hi<N;++__hi) x[__hi]=__init_x[__hi]; }`;
+  both emitters got a public `emit_initializer` wrapper (decl-position brace
+  lists). Unit tests: `test_transformer_global_init_hoisting.py` +8.
+- **Corpus proof:** hash rig baseline (detached main-wt @d2785a8d) vs branch →
+  **exactly 22 changed / 1481 byte-identical**; 6 were baseline-PASS (3dSBWz
+  3lSyDD 4ddcWf 4tVcDK WlsSzH ltcBzN — arrays with user-macro elements, e.g.
+  `vec3[8](PNN,...)`, that the conservative predicate now hoists; semantically
+  identical) — all re-tested, **stayed PASS**. Delta (ledgers direct):
+  **1303 → 1313, +10, REGRESSED 0.** FIXED: WlK3Rd tl2XzG 3sscDj + ALL 7
+  matrix-array shaders (4lXGRl 4tlGDM MsV3WW ldScDt XsK3R3 4lfcRH 4tdBWf).
+  A2 error also gone (other blockers remain) in 3ld3WX (`Object`), Mlcczs
+  (`mat3x3` type), 3dK3zR (`gl_FragCoord`), ld2BWW (N int2↔float2), tsjyDG,
+  MlBfRV. houdini_smoke exit 0 + `rc.py smoke` exit 0 (main tree, fix commit).
+- **Known residual (documented, not corpus-relevant):** multi-dimensional
+  arrays (`a[2][3]`, GLSL 4.3+) with non-const elements would get a malformed
+  copy-loop bound from `_hoist_array_global`'s bracket slice — no cached shader
+  hits it (blast radius = 22, all accounted).
+- **Category A is now CLOSED as a blocker** — every remaining A-tagged shader
+  fails only on other categories.
+- **PASS 1303 → 1313/1499.** Branch: `fix/transpiler-a2-temp-copy` (race loser
+  `fix/transpiler-a2-element-assign` deleted).
+
+## Session 53 — category E: matrix mul in preprocessor territory (2026-07-16)
+
+- **Target:** E, 24 shaders / 17 sole-blockers, `cannot convert between vector
+  and non-scalar values (floatN / matrixNxN)`. No BACKLOG row existed — the
+  session opened with a read-only investigation subagent, whose headline ("7
+  sole-blockers are stale artifacts, just re-test") was **DISPROVED by
+  re-testing** (all 24 still failed). Lesson: verify agent claims against the
+  campaign compile path before acting. The corrected clustering held: the S19
+  AST matmul path is correct; every E failure sat in preprocessor territory.
+- **Cluster A (11 sole):** statement-level `#if`/`#ifdef` blocks in function
+  bodies — `_transform_preprocessor` flattened the whole node to raw text even
+  though tree-sitter parses the contents as structured statements (probe:
+  `preproc_ifdef` → identifier + statement children + `preproc_else`). Proof
+  in-corpus: wldXWr has the SAME `p.xz *= Rot(...)` construct passing at d0
+  and failing inside `#ifdef`. Includes decl-in-`#if`/use-outside (wll3z2,
+  wtKXWV). **Cluster B (5 clean + 2 deferred):** `#define` bodies where the
+  S14/S20 textual pass renames `mat2(` → `GLSL_mat2(` but never wraps the
+  `*`/`*=` around it.
+- **Fix (owner-approved: both parts, one branch):**
+  1. **Preproc-block AST routing** (`ast_transformer.py`): route clean
+     statement children through `_transform_node`, emit inside the original
+     directives via new `IR.PreprocessorBlock` (`emit_PreprocessorBlock` in
+     BOTH emitters); `_PreprocRouteAbort` + catch-all → raw-text fallback (the
+     worst case per block is the status quo); global scope keeps raw path.
+     Enablers: `cast_expression` handler (Stage-0 pre-rewrites `vecN(...)` →
+     `(floatN)(...)` on #if lines BEFORE parse; unknown-node dispatch used to
+     silently DROP the cast) + `GLSL_matN(...)` typing in
+     `_infer_builtin_function_type` + `ASTNode.has_error` property.
+  2. **Macro-body wrap** (`preprocessor_transformer.py`):
+     `_wrap_matrix_ctor_muls` — `X *= GLSL_matN(...)` → `X = GLSL_mul(X, ...)`
+     and `A * GLSL_matN(...)` / `GLSL_matN(...) * A` → `GLSL_mul(...)`;
+     balanced-paren operand scanners, associativity guards (`a/b*M` left
+     alone), literal-ctor evidence mandatory (GLSL_mul has no
+     vec·vec/scalar·scalar overload). Also fires on #if lines pre-parse, so it
+     composes with (and pre-empts) the routing. Gotcha: the first version
+     required the ctor to END the `*=` RHS — XlKSWG's braced statement-macro
+     (`v*=GLSL_mat2(c,s,-s,c); }`) needed the boundary check relaxed to
+     `;`/`}`/`,`/`)`.
+- **Unit tests:** `test_transformer_preproc_matrix.py` (+13: routing incl.
+  else-branches, decl-in-if, matrix-macro seeding, cast survival, raw
+  fallback on unroutable child (switch), header-scope untouched; wrap incl.
+  both directions, plain-scalar guard, bare-ctor-body guard). Suite **2125
+  passed + 6 skipped**.
+- **Corpus:** hash rig **219 changed / 1284 identical** (135 was-PASS — wide
+  radius from re-emitting every function-body #if block), 0 new
+  transpile-stage errors. All re-tested in batches (slow FAIL ids one-by-one;
+  three >10-min pathological compiles: 4sl3z4 completed solo and FLIPPED,
+  MtXfWn stays COMPILE_FAIL (pre-existing pathological, could not recompile
+  within budget — ledger entry stale but verdict unchanged), MttcWr (was-PASS)
+  accepted via statement-level output-diff equivalence: 3 hunks, pure
+  re-formatting, both #if branches preserved). Delta (ledgers direct):
+  **1313 → 1348, +35, REGRESSED 0 — biggest single-session win of the
+  campaign** (S38 was +29). 19 of 35 flips were non-E collateral: the routing
+  cleared ifdef-textual residuals across categories (B 39→25 failing passes).
+  FIXED: 3dGSzR 3ds3WN 3lSyzz 3sd3Rj 4dVXWz 4lSBzm 4lcXDM 4sl3z4 4tSSzt
+  4tVGzK 4tVSDm 4tsSRj MdGBWD MdycRK MllBzj MtscRM XlKSWG XlVSWh XsBcDc
+  Xt2XDh XtfSDS lsGyDt lsXGzH lstBDl tdjfDR tlsyWB wdSGRh wdSXW1 wdjcRm
+  wdsXWl wldXWr wll3z2 wstXz8 wtKXWV wtV3DW.
+- **ENVIRONMENT TRAP (new):** Houdini **22.0.368** was installed between
+  sessions; both smoke gates auto-pick the NEWEST hython, whose Python lacks
+  tree_sitter → both gates fail with ModuleNotFoundError regardless of the
+  diff. Re-ran with `HYTHON` pinned to 21.0.440: **houdini_smoke exit 0,
+  rc.py smoke exit 0.** Until the owner installs the deps into 22.0 (or the
+  scripts pin a version), set
+  `HYTHON=C:\Program Files\Side Effects Software\Houdini 21.0.440\bin\hython.exe`.
+- **E is OFF THE BOARD.** Deferred: XlcBR7/Wl23WV (macro-NAME operands, needs
+  macro type tracking). **PASS 1313 → 1348/1499.** Branch:
+  `fix/transpiler-e-preproc-matrix`, merged f47d7e74.
+- **S53 addendum (2026-07-16, post-merge):** the owner installed the missing
+  deps into Houdini 22.0.368 — BOTH smoke gates re-verified **exit 0 on 22.0
+  unpinned** (S53 code unchanged). Houdini 22 is now the default gate target;
+  the HYTHON pin is only a diagnostic fallback.
+
+## Session 54 — category X: square full-name matrix type spellings (2026-07-16)
+
+- **Root cause:** GLSL accepts the redundant square spelling `matNxN` as an
+  exact synonym of `matN` (`mat3x3`==`mat3`, `mat2x2`==`mat2`, `mat4x4`==`mat4`),
+  in BOTH type-name and constructor position. tree-sitter-glsl tolerates it
+  (no ParseError) but leaks it through verbatim, so the OpenCL compiler errored
+  `unknown type name 'mat3x3'` (+ cascade `expected ';'` / `use of undeclared`).
+- **Fix (parser pre-normalization, transformer-untouched):** added
+  `_SQUARE_MATRIX_SPELLING = re.compile(r'\bmat([234])x\1\b')` and one
+  `.sub(r'mat\1', source)` in `_normalize_array_syntax`
+  (`parser/glsl_parser.py`), next to the other tree-sitter-spelling rewrites.
+  The **backreference `x\1`** matches ONLY the square cases; the non-square
+  spellings (`mat2x4`, `mat3x2`, `mat4x2`) are genuinely distinct types and are
+  deliberately left untouched — still deferred (they need real struct types;
+  4sBfW3's `mat2x4` remains FAIL).
+- **Zero-regress by construction — no hash rig needed.** The regex can only
+  change output for shaders literally containing a square `matNxN`. A
+  `grep -rlE 'mat2x2|mat3x3|mat4x4' cache/` (a superset of the regex's match
+  set) returned exactly 7 shaders — **all 7 were already FAILING** (5 X sole-
+  blockers, wdSfWh multi-cat, tdXfDB with the match inside a `//` comment). No
+  currently-PASSing shader is in the blast radius ⇒ no PASS→FAIL possible ⇒ the
+  full-corpus re-test was unnecessary; the grep IS the complete proof.
+- **Tests:** `tests/unit/test_parser_square_matrix_spelling.py` (7 tests —
+  string normalization for each square size, non-square left untouched, word-
+  boundary guard `mat3x3_scale`, end-to-end parse). Unit suite **2132 passed +
+  6 skipped, 0 failed** (2125 baseline + 7 new).
+- **Corpus delta:** re-tested the 7 blast-radius ids `--force`.
+  **FIXED (5): Mlcczs, XtfyWs, lltBzr, tsdSzn, wtjGDW. REGRESSED: 0. NET +5.**
+  wdSfWh's X blocker cleared but it stays COMPILE_FAIL on J/N; tdXfDB unchanged
+  TRANSPILE_FAIL (G). **PASS 1348 → 1353/1499.**
+- **Houdini gates:** `houdini_smoke.py` exit 0 AND `rc.py smoke` exit 0, both on
+  **22.0.368 unpinned** (main tree, on the fix branch). No HYTHON pin needed.
+- Branch: `fix/transpiler-x-square-matrix`. X residual after this: non-square
+  matrices (4sBfW3 mat2x4), `not(bvec)` (3d23WK), `fract`-overload (MlsSzf),
+  float2→float3/4 init/assign (ll2cRR, llBcW1), plus the opaque
+  BUILD_PROGRAM_FAILURE stars (3dGSD3, 3lcGR2, 3tjyWy, 4ttBRB).
+
+## Session 55 — category B residual re-triage + the "easy B" scope-shadow fix (2026-07-17)
+
+- **Re-triage (the assigned task):** the 7 current B sole-blockers were
+  root-caused individually. **6 of 7 are macro-textual/pointer interactions**
+  with no localized AST fix: 4dtczB = `#define SampleMaterial MetallisedMarble`
+  (a macro aliasing a function name — the out-param resolver keys on the spelled
+  callee, so it mis-derefs every pointer arg); XdKSRV = `#define PUTN(n)
+  printInt(...)` (out-param call inside a macro body, invisible to AST
+  `&`-insertion); XsXfz2/3dGXDt/XtfcRX = pointer args threaded through macro
+  bodies / stack-machine `#define`s. These are N/J-family, not B. **Owner
+  decision (2026-07-17): skip the redesign; do the one easy B, defer Q/P for the
+  owner's own digging → Session 56.**
+- **The easy B — local shadows an out/inout pointer param (tsXBzs):** a helper
+  `traceray(..., inout vec3 r, ...)` declares a nested local `float r = 0.05;`
+  that shadows the param; GLSL scoping makes later reads in that block the local,
+  but `pointer_params` was a FLAT per-function set, so the deref logic emitted
+  `float r2 = *r * *r;` → "indirection requires pointer operand ('float')".
+- **Fix (block-scoped pointer_params):** `_transform_compound_statement` now
+  snapshots `pointer_params` on entry and restores it on exit; `_transform_declaration`
+  discards a name from `pointer_params` when a local shadows it — AFTER the
+  initializer is transformed (so a self-referencing init `float r = r;` still
+  reads the param), and the block-exit restore brings the param's deref back for
+  later reads. Transformer-only; no emitter mirror. `local_types` shadowing is
+  left as-is (a latent type-inference nicety, not the compile blocker).
+- **Zero-regress, proven by the hash rig (shared emission path → rig mandatory):**
+  baseline worktree `fc70a16c` vs fix tree, 2171 passes hashed each. **Exactly 1
+  pass changed output: tsXBzs:image.** Every other shader byte-identical (the
+  save/restore is a no-op absent a shadow discard; a shadow of a pointer param
+  is ALWAYS a pre-existing compile failure, so no PASS shader can be in the
+  blast radius). Tests: `tests/unit/test_transformer_pointer_param_shadow.py`
+  (2). Unit suite **2134 passed + 6 skipped** (2132 + 2).
+- **Corpus delta:** re-tested tsXBzs `--force`. **FIXED (1): tsXBzs. REGRESSED:
+  0. NET +1. PASS 1353 → 1354/1499.**
+- **Houdini gates:** `houdini_smoke.py` exit 0 AND `rc.py smoke` exit 0, 22.0.368
+  unpinned, main tree on the fix branch.
+- Branch: `fix/transpiler-b-pointer-shadow`. **B residual after this is all
+  macro-textual/pointer (owner-approval / N-J redesign territory).** Q and P
+  re-triage findings written to NEXT_SESSION.md for Session 56 (owner is digging
+  into those).

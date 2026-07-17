@@ -46,7 +46,7 @@ CATEGORY_DIFFICULTY = {
     "Q": "low", "R": "low", "S": "med", "T": "med", "U": "med", "V": "med",
     "W": "med", "X": "low", "Y": "med", "Z": "high", "AA": "low",
     "AB": "med", "AC": "low", "AD": "med", "AE": "med", "AF": "med",
-    "AG": "med", "AH": "low", "AI": "med",
+    "AG": "med", "AH": "low", "AI": "med", "AJ": "med", "AK": "med",
     "UNKNOWN": "unknown",
 }
 
@@ -72,7 +72,7 @@ CATEGORY_DESC = {
     "T": "parameter qualifier combo (const in) / leaked in/out",
     "U": "user identifier collides with OpenCL reserved word",
     "V": "scalar constructor float()/int() not converted to cast",
-    "W": "GLSL_ builtin call ambiguous (overload resolution)",
+    "W": "GLSL_ builtin call unresolved overload (ambiguous or no match)",
     "X": "GLSL builtin function not provided (uintBitsToFloat, etc.)",
     "Y": "user #define collides with harness/IMX identifier (resolution...)",
     "Z": "sampler2D/samplerCube param in user fn not converted to IMX_Layer*",
@@ -85,6 +85,8 @@ CATEGORY_DESC = {
     "AG": "assignment target is not an lvalue (expression is not assignable)",
     "AH": "struct type name used without typedef ('struct' tag required)",
     "AI": "member/swizzle access on a non-struct scalar or array",
+    "AJ": "int/float mismatch where an integer is required (shift/bitwise operand or array subscript)",
+    "AK": "pointer address-space mismatch (__global/__local pointer to a private/generic pointer param)",
     "UNKNOWN": "unbucketed compiler error (needs review)",
 }
 
@@ -178,9 +180,11 @@ def classify(transpile_err: str = "", compile_err: str = "", source: str = ""):
         if ("statement requires expression of scalar type" in low
                 or "vector condition type" in low):
             cats.append("O")
-        # W: ambiguous overload resolution of a GLSL_ builtin (e.g. int/scalar
-        #    args matching several float overloads of GLSL_dot/mix/...)
-        if "is ambiguous" in low:
+        # W: unresolved overload of a GLSL_ builtin -- either ambiguous (int/scalar
+        #    args matching several float overloads of GLSL_dot/mix/...) or no match
+        #    at all (e.g. a bvec condition passed to GLSL_mix via an `If` macro in
+        #    3lc3zj). GLSL_mat* arg-count mismatches stay with C (excluded here).
+        if "is ambiguous" in low or re.search(r"no matching function for call to 'GLSL_(?!mat)", ce):
             cats.append("W")
         # U: user identifier collides with an OpenCL reserved word/type.
         #   - `char`-style: "cannot combine with previous '...' declaration specifier"
@@ -202,10 +206,21 @@ def classify(transpile_err: str = "", compile_err: str = "", source: str = ""):
         if _search([r"unexpected type name '?(?:mat|vec|ivec|uvec|float|int|uint|bool)[234]",
                     r"expected expression.*\b(?:mat|vec|float|int)[234]\s*\("], ce):
             cats.append("J")
-        # H: struct matrix has no C arithmetic operators
+        # H: struct matrix has no C arithmetic operators (binary or unary, e.g.
+        #    `-mh` negation of a mat2 in wdjcRm)
         if _search([rf"invalid operands.*{_MATRIX}", rf"{_MATRIX}.*invalid operands",
-                    rf"operands? to binary expression \('?{_MATRIX}"], ce):
+                    rf"operands? to binary expression \('?{_MATRIX}",
+                    rf"invalid argument type '?{_MATRIX}'? to unary"], ce):
             cats.append("H")
+        # AJ: a float value reached a spot where OpenCL C demands an integer
+        #     (a GLSL_ builtin/literal stayed float). Two shapes seen:
+        #     - scalar int/float binary op `2 << -GLSL_floor(23.f)` (ttfGRB)
+        #     - float array subscript `arr[9 * GLSL_min(state, 1) + n]` (WsG3zz)
+        #     Excludes matrix operands (H).
+        if re.search(r"invalid operands to binary expression "
+                     r"\('(?:u?int|float|double)' and '(?:u?int|float|double)'\)", ce) \
+                or "array subscript is not an integer" in low:
+            cats.append("AJ")
         # E: v*M not rewritten -> raw '*' between vector and matrix struct
         if _search([rf"cannot convert between vector and non-scalar.*{_MATRIX}",
                     rf"{_MATRIX}.*cannot convert between vector"], ce):
@@ -222,7 +237,13 @@ def classify(transpile_err: str = "", compile_err: str = "", source: str = ""):
         # (`int note[3]` -> `int ,` => "parameter name omitted").
         if ("expected expression" in low and (re.search(r"(?:=|return)\s*\{", ce)
                 # GLSL array constructor `= float[N](...)` / `= int[count](...)`
-                or re.search(r"=\s*\w+\s*\[\s*\w+\s*\]\s*\(", ce))) \
+                or re.search(r"=\s*\w+\s*\[\s*\w+\s*\]\s*\(", ce)
+                # ...same constructor but clang suppressed the (huge) source line,
+                # so only "expected expression" survives -> fall back to the source
+                # (`int voxels[1840] = int[1840](...)` in MlBfRV)
+                or re.search(r"\b(?:float|u?int|vec[234]|[iu]vec[234])\s*"
+                             r"\[\s*\d+\s*\]\s*\(", src))) \
+                or "array initializer must be an initializer list" in low \
                 or "parameter name omitted" in low:
             cats.append("K")
         # C (compile side): wrong arg count into a GLSL_mat* helper / diagonal
@@ -297,6 +318,12 @@ def classify(transpile_err: str = "", compile_err: str = "", source: str = ""):
         # AH: struct declared without typedef, then used by bare name
         if "must use 'struct' tag to refer to type" in low:
             cats.append("AH")
+        # AK: an address-space-qualified pointer (a `__global` global-scope array or
+        #     struct) is passed to a user fn whose pointer/array param is generic/
+        #     private -> "changes address space of pointer" (tsjyDG: InitLight(LIGHT
+        #     all_light[N_LIGHTS]) called on a __global array)
+        if "changes address space of pointer" in low:
+            cats.append("AK")
         # AI: member/swizzle access on something that is no longer a struct or
         #     vector (type inference collapsed it to a scalar, or an array)
         if re.search(r"member reference base type '(?:float|int|uint|bool|double)'",

@@ -312,6 +312,12 @@ class OpenCLEmitter:
             return self._braced_args(node.arguments)
         return self.emit(node)
 
+    def emit_initializer(self, node) -> str:
+        """Public wrapper over _emit_initializer for hosts that render a
+        declaration-position initializer directly (category A2 hoisted array
+        temp-locals: `T __init_x[N] = <initializer>;`)."""
+        return self._emit_initializer(node)
+
     def emit_ArrayConstructor(self, node: IR.ArrayConstructor) -> str:
         """
         Emit a GLSL array constructor in expression position as an unsized
@@ -867,6 +873,22 @@ class OpenCLEmitter:
             Comment text with newline
         """
         return f"{node.text}\n"
+
+    def emit_PreprocessorBlock(self, node: IR.PreprocessorBlock) -> str:
+        """
+        Emit an AST-routed #if/#ifdef block (Session 53, category E).
+
+        Each segment is (directive_line, statements); directives sit at
+        column 0 (preprocessor convention), the transformed statements keep
+        the surrounding indentation, and the block closes with #endif.
+        """
+        result = ""
+        for directive_line, statements in (node.segments or []):
+            result += f"{directive_line}\n"
+            for stmt in statements:
+                result += self.emit(stmt)
+        result += "#endif\n"
+        return result
 
     def emit_PreprocessorDirective(self, node: IR.PreprocessorDirective) -> str:
         """

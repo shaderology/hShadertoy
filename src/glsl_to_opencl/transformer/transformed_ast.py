@@ -587,6 +587,22 @@ class PreprocessorDirective(TransformedNode):
 
 
 @dataclass(frozen=True)
+class PreprocessorBlock(TransformedNode):
+    """
+    Category E (Session 53) — a statement-level `#if`/`#ifdef` conditional
+    block in a FUNCTION BODY whose contents parsed as clean statements and
+    were routed through the normal AST transform (instead of the historical
+    raw-text passthrough, which left everything inside untyped and unlowered).
+
+    `segments` is an ordered list of (directive_line, statements) pairs — the
+    first entry's directive is `#if .../#ifdef X/#ifndef X`, later entries are
+    `#elif .../#else`. The closing `#endif` is implicit at emission.
+    """
+    # List[Tuple[str, List[TransformedNode]]]
+    segments: list = None
+
+
+@dataclass(frozen=True)
 class Comment(TransformedNode):
     """
     Verbatim source comment (top-level only).

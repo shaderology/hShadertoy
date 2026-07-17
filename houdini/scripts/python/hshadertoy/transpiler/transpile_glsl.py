@@ -20,7 +20,10 @@ sys.path.insert(0, 'C:/dev/hShadertoy')
 
 from src.glsl_to_opencl.parser import GLSLParser
 from src.glsl_to_opencl.analyzer import TypeChecker, create_builtin_symbol_table
-from src.glsl_to_opencl.transformer.ast_transformer import ASTTransformer
+from src.glsl_to_opencl.transformer.ast_transformer import (
+    ASTTransformer,
+    HoistedArrayInit,
+)
 from src.glsl_to_opencl.transformer import transformed_ast as IR
 from src.glsl_to_opencl.codegen.opencl_emitter import OpenCLEmitter
 from src.glsl_to_opencl.preprocessor import (
@@ -398,8 +401,21 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         if hoisted_global_inits:
             hoist_emitter = OpenCLEmitter(indent_size=4)
             hoist_lines = ["// ---- hoisted global initializers (category A) ----"]
-            for name, init_ir in hoisted_global_inits:
-                hoist_lines.append(f"{name} = {hoist_emitter.emit(init_ir)};")
+            for entry in hoisted_global_inits:
+                if isinstance(entry, HoistedArrayInit):
+                    # A2 — array global: temp-local (non-constant aggregate init
+                    # legal on a local) copied element-by-element into the bare
+                    # global. Mirrors Host A (tests/transpile.py).
+                    b, et, sz, init_ir = entry
+                    init_txt = hoist_emitter.emit_initializer(init_ir)
+                    hoist_lines.append(
+                        f"{{ {et} __init_{b}[{sz}] = {init_txt};"
+                        f" for (int __hi = 0; __hi < {sz}; ++__hi)"
+                        f" {b}[__hi] = __init_{b}[__hi]; }}"
+                    )
+                else:
+                    name, init_ir = entry
+                    hoist_lines.append(f"{name} = {hoist_emitter.emit(init_ir)};")
             body = "\n".join(hoist_lines) + "\n" + body
 
         # Category AG push-pop — re-apply the user's uniform remaps at the
