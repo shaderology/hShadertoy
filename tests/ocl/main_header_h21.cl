@@ -18,12 +18,10 @@
 #define AT_dPdx_image   ((float2)(_RUNOVER_LAYER.stat->buffer_to_image.x,0))
 #define AT_dPdx_pixel   ((float2)(_RUNOVER_LAYER.stat->buffer_to_pixel.x,0))
 #define AT_dPdx_texture ((float2)(1.0f/(float)_RUNOVER_LAYER.stat->resolution.x,0))
-#define AT_dPdx_world   (_RUNOVER_LAYER.stat->buffer_to_image.x * _RUNOVER_LAYER.stat->image_to_world.lo.lo.xyz)
 #define AT_dPdx AT_dPdx_image
 #define AT_dPdy_image   ((float2)(0, _RUNOVER_LAYER.stat->buffer_to_image.y))
 #define AT_dPdy_pixel   ((float2)(0, _RUNOVER_LAYER.stat->buffer_to_pixel.y))
 #define AT_dPdy_texture ((float2)(0, 1.0f/(float)_RUNOVER_LAYER.stat->resolution.y))
-#define AT_dPdy_world   (_RUNOVER_LAYER.stat->buffer_to_image.y * _RUNOVER_LAYER.stat->image_to_world.lo.hi.xyz)
 #define AT_dPdy AT_dPdy_image
 #define AT_dPdxy_image (_RUNOVER_LAYER.stat->buffer_to_image.xy)
 #define AT_dPdxy_pixel (_RUNOVER_LAYER.stat->buffer_to_pixel.xy)

@@ -33,8 +33,13 @@ from .errors import ParseError
 #    compile-time size (`vec2[N] poly`, `ball[BALLCOUNT] balls`) as well as a
 #    digit literal. An identifier size never appears in a genuine subscript
 #    followed by `ident [=;,)]`, so widening the group stays safe.
+# The size may be a constant *expression*, not just a single token — `vec3[SZ*3]
+# vertices` (tdjfWc). The size group therefore accepts anything but a bracket,
+# and the whole match is pinned to a single line (horizontal whitespace only):
+# a multi-line match would let a bracketed range in a trailing comment
+# (`// remap to [0,1]`) fuse with the next line's identifier and delete it.
 _TYPE_FIRST_ARRAY_DECL = re.compile(
-    r'\b([A-Za-z_]\w*)\s*\[\s*(\w*)\s*\]\s+([A-Za-z_]\w*)\s*(?=[=;,)])'
+    r'\b([A-Za-z_]\w*)[ \t]*\[[ \t]*([^\]\[\n]*?)[ \t]*\][ \t]+([A-Za-z_]\w*)[ \t]*(?=[=;,)])'
 )
 # 2. Unsized array constructor `int[](...)` -> `int[1](...)`. The size is a
 #    parse placeholder only: the transformer discards it (see
@@ -62,6 +67,15 @@ _CONST_PARAM_QUALIFIER = re.compile(r'\bconst\s+(inout|in|out)\b')
 # on bool). Over-matching the call-arglist case (`vec4(float(a))`) is harmless —
 # it only adds a no-op `+` inside the argument.
 _PAREN_PRIMITIVE_CTOR = re.compile(r'\(\s*(float|int|uint|double)\s*\(')
+
+# Category P (4sjcz1): the same C-cast misread for the `bool` constructor —
+# `(bool(x) ? a : b)` is read as the cast `(bool)(x)`. `bool` is excluded from
+# the `+` rewrite above (unary `+` is illegal on bool), so it is disambiguated
+# with a double logical-not `!!`, which is identity on bool (`!!b == b`), forces
+# expression context (a cast operand cannot start with `!`), and emits fine as
+# OpenCL. Over-matching the already-legal call/`if` case (`if(bool(x))`) is
+# harmless — `!!` leaves the truth value unchanged.
+_PAREN_BOOL_CTOR = re.compile(r'\(\s*bool\s*\(')
 
 # Category P (cluster 2): the GLSL ES precision qualifiers `highp`/`mediump`/
 # `lowp` are rejected by tree-sitter-glsl wherever they prefix a type, and so is
@@ -299,8 +313,9 @@ def _normalize_array_syntax(source: str) -> str:
     source = _PRECISION_QUALIFIER.sub('', source)
     source = _rewrite_logical_xor(source)
     # after XOR: the wrapping parens can create a fresh `(float(` etc., so the
-    # parenthesised-primitive-ctor rewrite must run last.
+    # parenthesised-primitive-ctor rewrites must run last.
     source = _PAREN_PRIMITIVE_CTOR.sub(r'(+\1(', source)
+    source = _PAREN_BOOL_CTOR.sub(r'(!!bool(', source)
     return source
 
 

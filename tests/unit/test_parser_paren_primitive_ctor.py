@@ -68,10 +68,16 @@ def test_normalize_inserts_unary_plus():
     assert _normalize_array_syntax("x = (float(3));") == "x = (+float(3));"
 
 
-def test_normalize_leaves_bool_ctor_untouched():
-    # unary + is illegal on bool, so `(bool(` must NOT be rewritten
-    src = "x = (bool(a));"
-    assert _normalize_array_syntax(src) == src
+def test_paren_bool_ctor_parses(parser):
+    # Category P 4sjcz1: `(bool(x) ? a : b)` — a grouping paren before a bool
+    # constructor is mis-read as the C-cast `(bool)(x)`. Unary `+` is illegal
+    # on bool, so this is disambiguated with the identity `!!` instead.
+    parser.parse(_wrap("float k = (bool(g.x) ? 1.0 : 0.0);"))
+
+
+def test_normalize_inserts_double_not_on_bool_ctor():
+    # `!!` is identity on bool and forces expression context (cannot be a cast)
+    assert _normalize_array_syntax("x = (bool(a));") == "x = (!!bool(a));"
 
 
 def test_normalize_leaves_call_arg_semantically_noop():

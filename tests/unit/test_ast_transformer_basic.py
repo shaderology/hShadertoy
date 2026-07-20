@@ -112,6 +112,19 @@ def test_float_literal_already_suffixed():
     assert opencl.count('1.0f') == 1  # No double-suffix
 
 
+def test_float_literal_uppercase_f_suffix():
+    """Test float literal with uppercase 'F' suffix is normalized to 'f'.
+
+    GLSL accepts both 0.951F and 0.951f; OpenCL / our FloatLiteral require
+    lowercase 'f'. Regression: shader 3lX3Rr used `0.95100F` (category P).
+    """
+    glsl = "void test() { float x = 0.95100F; }"
+    opencl = transform_and_emit(glsl)
+
+    assert '0.95100f' in opencl
+    assert '0.95100F' not in opencl  # uppercase suffix normalized away
+
+
 def test_integer_literal_unchanged():
     """Test integer literals don't get 'f' suffix."""
     glsl = "void test() { int x = 42; }"

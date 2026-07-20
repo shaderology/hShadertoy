@@ -1,6 +1,6 @@
 # Phase 5 — Mass-Test Campaign Report
 
-_Generated 2026-07-17_
+_Generated 2026-07-20_
 
 **API budget:** 498/1500 calls used this month (1002 remaining).
 
@@ -12,22 +12,22 @@ _Generated 2026-07-17_
 ## Pipeline outcome (tested shaders)
 
 - Tested: 1499
-- **PASS (transpile+compile): 1354 (90%)**
-- COMPILE_FAIL: 116
-- TRANSPILE_FAIL: 29
+- **PASS (transpile+compile): 1365 (91%)**
+- COMPILE_FAIL: 111
+- TRANSPILE_FAIL: 23
 
 ## Failures ranked by category
 
 | Cat | Difficulty | Fails | Shaders | Description |
 |-----|-----------|-------|---------|-------------|
 | B | high | 24 | 15 | out/inout pointer param not dereferenced on read |
-| G | high | 13 | 12 | preprocessor #if/#ifdef splits statements |
 | K | high | 13 | 11 | GLSL array/aggregate decl/ctor or brace-init rvalue |
+| G | high | 12 | 11 | preprocessor #if/#ifdef splits statements |
 | N | med | 75 | 34 | vector size/type conversion mismatch |
-| P | med | 15 | 14 | other parse/transpile crash |
 | T | med | 11 | 9 | parameter qualifier combo (const in) / leaked in/out |
 | J | med | 10 | 10 | type constructor inside #define macro body |
 | AK | med | 10 | 5 | pointer address-space mismatch (__global/__local pointer to a private/generic pointer param) |
+| P | med | 9 | 9 | other parse/transpile crash |
 | V | med | 8 | 6 | scalar constructor float()/int() not converted to cast |
 | AJ | med | 7 | 3 | int/float mismatch where an integer is required (shift/bitwise operand or array subscript) |
 | C | med | 5 | 5 | matrix constructor by arg-count not component-count |
@@ -39,10 +39,10 @@ _Generated 2026-07-17_
 | AG | med | 2 | 2 | assignment target is not an lvalue (expression is not assignable) |
 | AI | med | 2 | 2 | member/swizzle access on a non-struct scalar or array |
 | AD | med | 2 | 2 | expression collapsed to empty parens '()' (dropped sub-expression) |
+| AF | med | 1 | 1 | vector constructor with wrong number of components |
 | U | med | 1 | 1 | user identifier collides with OpenCL reserved word |
 | AB | med | 1 | 1 | for-loop header corrupted by a spurious extra ';' (paren mismatch) |
 | X | low | 15 | 14 | GLSL builtin function not provided (uintBitsToFloat, etc.) |
-| Q | low | 14 | 7 | GLSL builtin global not provided (gl_FragCoord...) |
 | D | low | 12 | 12 | user function overloading |
 | E | low | 7 | 7 | type not propagated through unary/paren (v*M mis-detected) |
 | AH | low | 3 | 2 | struct type name used without typedef ('struct' tag required) |

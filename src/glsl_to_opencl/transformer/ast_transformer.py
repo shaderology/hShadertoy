@@ -367,6 +367,27 @@ class ASTTransformer:
             or re.search(r'\b(?:vec4|float4)\s+gl_FragCoord\b', src)
         )
 
+        # Category Q (Design B) — gl_FragCoord referenced in HELPER functions.
+        # Helpers can't see the entry's kernel-local gl_FragCoord, so they read
+        # it through the runtime accessor GLSL_glFragCoord() (glslHelpers.h),
+        # which reconstructs the pixel coord from get_global_id() + a uniform
+        # offset static. The offset static is seeded by the HDA setter
+        # `shadertoy_bind_inputs()` at the top of EVERY kernel body (host header),
+        # so the transpiler emits no seed of its own (retired Session 58). Only
+        # the frag-token regex is set up here, driving the per-function helper
+        # injection in _transform_function_definition:
+        #  * frag-token regex: `gl_FragCoord` plus every object-macro alias of it
+        #    (`#define F gl_FragCoord`). The alias #define survives into the
+        #    emitted OpenCL and the device preprocessor expands `F` back to
+        #    `gl_FragCoord`, so a helper written with `F.xy` must still receive
+        #    the injected local. Resolving aliases here lets one regex cover both.
+        self._gl_fragcoord_token_re = None
+        if not self._gl_fragcoord_user_provided:
+            aliases = set(re.findall(r'#\s*define\s+(\w+)\s+gl_FragCoord\b', src))
+            tokens = {'gl_FragCoord'} | aliases
+            self._gl_fragcoord_token_re = re.compile(
+                r'\b(?:' + '|'.join(re.escape(t) for t in tokens) + r')\b')
+
         # Category D2 — pre-scan for user functions colliding with a Houdini
         # header builtin; build the rename map before any call site is walked so
         # renaming is order-independent (recursion, call-before-definition).
@@ -528,8 +549,12 @@ class ASTTransformer:
         # 'f' -> invalid 'Uf' suffix or a silently wrong value).
         text_lower = text.lower()
         if not text_lower.startswith('0x') and ('.' in text or 'e' in text_lower):
-            # Add 'f' suffix if not present
-            if not text.endswith('f') and not text.endswith('F'):
+            # Normalize an uppercase 'F' suffix to lowercase 'f' — GLSL accepts
+            # both (e.g. 0.95100F), but OpenCL / our FloatLiteral require the
+            # lowercase form. Otherwise add 'f' when the suffix is absent.
+            if text.endswith('F'):
+                text = text[:-1] + 'f'
+            elif not text.endswith('f'):
                 text = text + 'f'
 
             return IR.FloatLiteral(
@@ -3618,21 +3643,25 @@ class ASTTransformer:
         entry_points = {'mainImage', 'mainCubemap', 'mainSound', 'mainVR'}
         overloadable = func_name not in entry_points
 
-        # Category Q — gl_FragCoord builtin used directly in the entry body.
-        # gl_FragCoord is a fragment-shader builtin whose .xy is the pixel-center
-        # coordinate: exactly `fragCoord`, the value the entry already receives.
-        # OpenCL has no such builtin, so referencing it fails with "undeclared
-        # identifier 'gl_FragCoord'". Inject a body-local derived from fragCoord
-        # (the exact Shadertoy value; z/w take nominal fragment values). fragCoord
-        # is always in scope at the top of the emitted entry body (the host's
-        # SHADERTOY_INPUTS provides it). Only the ENTRY body is covered — a helper
-        # that reads gl_FragCoord would need the coordinate threaded through its
-        # parameters (a larger redesign); those remain deliberately unfixed.
-        if (func_name == self.entry_function
-                and not self._gl_fragcoord_user_provided
-                and re.search(r'\bgl_FragCoord\b', body_node.text)
-                and isinstance(body, IR.CompoundStatement)):
-            gl_fragcoord_decl = IR.Declaration(
+        # Category Q — gl_FragCoord builtin. gl_FragCoord.xy is the pixel-center
+        # fragment coordinate; OpenCL has no such builtin, so a reference fails
+        # with "undeclared identifier 'gl_FragCoord'". `_gl_fragcoord_token_re`
+        # (set in transform()) matches gl_FragCoord and every object-macro alias
+        # of it; a match against `body_node.text` also catches uses inside
+        # inactive `#ifdef` blocks (the raw source text), which is harmless.
+        token_re = self._gl_fragcoord_token_re
+        body_uses_fragcoord = bool(
+            token_re and isinstance(body, IR.CompoundStatement)
+            and token_re.search(body_node.text or ''))
+
+        if func_name == self.entry_function and not self._gl_fragcoord_user_provided \
+                and body_uses_fragcoord:
+            # ENTRY body — inject the proven fragCoord-based local for the entry's
+            # OWN gl_FragCoord reads (it uses the true `fragCoord` the entry
+            # receives). The gid->pixel offset static that helpers read via
+            # GLSL_glFragCoord() is seeded by the HDA setter shadertoy_bind_inputs()
+            # at the top of every kernel body, so no transpiler seed is emitted.
+            frag_local = IR.Declaration(
                 type_name="float4",
                 name="gl_FragCoord",
                 initializer=IR.TypeConstructor(
@@ -3645,7 +3674,27 @@ class ASTTransformer:
                 ),
             )
             body = IR.CompoundStatement(
-                statements=[gl_fragcoord_decl] + list(body.statements or []),
+                statements=[frag_local] + list(body.statements or []),
+                source_location=body.source_location,
+            )
+        elif func_name != self.entry_function and body_uses_fragcoord \
+                and not self._gl_fragcoord_user_provided:
+            # HELPER body — resolve gl_FragCoord to the runtime accessor. The
+            # accessor rebuilds the raw pixel coordinate from get_global_id() +
+            # the entry-seeded offset (glslHelpers.h). Injecting a local named
+            # gl_FragCoord means zero read-site rewriting (mirrors the entry
+            # injection) and CPP-expanded aliases (`F` -> `gl_FragCoord`) bind to
+            # it too.
+            helper_decl = IR.Declaration(
+                type_name="float4",
+                name="gl_FragCoord",
+                initializer=IR.CallExpression(
+                    function="GLSL_glFragCoord",
+                    arguments=[],
+                ),
+            )
+            body = IR.CompoundStatement(
+                statements=[helper_decl] + list(body.statements or []),
                 source_location=body.source_location,
             )
 

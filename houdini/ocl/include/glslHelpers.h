@@ -58,6 +58,31 @@
 #define GLSL_RAD    0.01745329251994329577f       // pi/180
 #define GLSL_DEG    57.2957795130823208768f       // 180/pi
 
+// ---------- gl_FragCoord accessor for HELPER functions (category Q) ----------
+// GLSL's gl_FragCoord.xy is the pixel-center fragment coordinate. In the entry
+// body that value is available as the kernel-local `fragCoord`, but HELPER
+// functions cannot see kernel locals, and OpenCL forbids a per-work-item value
+// in a program-scope global. Reconstruct it from get_global_id() instead —
+// callable from any function.
+//
+// Empirically (verified in Houdini 22.0.368 at multiple resolutions) the COP
+// runover is a raw 1:1 pixel grid: fragCoord == (get_global_id(0),
+// get_global_id(1)) and get_global_size() == iResolution. GLSL_glFragCoord_off
+// is a self-correcting uniform bias: the entry body seeds it once per cook from
+// the raw pixel macros (AT_ix/AT_iy) so that any future UNIFORM offset/scale=1
+// launch-geometry change corrects itself. It is zero today, so the zero-init
+// default already yields the correct coordinate even before the entry seeds it.
+//
+// The write is a benign same-value race across work-items — the same pattern
+// the iResolution/iTime program-scope statics above already rely on.
+static int2 GLSL_glFragCoord_off;
+
+static float4 GLSL_glFragCoord(void) {
+  return (float4)((float)((int)get_global_id(0) + GLSL_glFragCoord_off.x),
+                  (float)((int)get_global_id(1) + GLSL_glFragCoord_off.y),
+                  0.0f, 1.0f);
+}
+
 // ---------- Fixed GLSL_mod (GLSL semantics: x - y*floor(x/y)) ----------
 __GLSL_OVER float  GLSL_mod(float  x, float  y){ return x - y * floor(x / y); }
 __GLSL_OVER float2 GLSL_mod(float2 x, float2 y){ return x - y * floor(x / y); }

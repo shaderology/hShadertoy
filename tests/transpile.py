@@ -63,6 +63,7 @@ from src.glsl_to_opencl.preprocessor import (
     collect_uniform_redefines,
     uniform_redefine_prefix,
 )
+from src.glsl_to_opencl.preprocessor.conditional_eval import strip_conditionals
 
 
 @dataclass
@@ -279,6 +280,25 @@ def partition_translation_unit(ir: "IR.TranslationUnit") -> Tuple["IR.FunctionDe
     return entry_ir, header_declarations
 
 
+# A `void mainImage(` definition sitting inside an un-evaluated program-scope
+# conditional blob (see _entry_trapped_in_conditional). Permissive by design —
+# it only gates a rescue attempt that is re-checked by re-partitioning.
+_TRAPPED_ENTRY_RE = re.compile(r'\bvoid\s+mainImage\s*\(')
+
+
+def _entry_trapped_in_conditional(ir: "IR.TranslationUnit") -> bool:
+    """True when a mainImage definition is hidden inside a raw preprocessor
+    blob — a program-scope `#ifdef`/`#ifndef` that tree-sitter kept verbatim
+    (so the entry never became a top-level FunctionDefinition and partition
+    failed). Comment-safe: a block-commented mainImage is a separate Comment
+    node, never a PreprocessorDirective."""
+    for decl in ir.declarations:
+        if (isinstance(decl, IR.PreprocessorDirective)
+                and _TRAPPED_ENTRY_RE.search(decl.text or "")):
+            return True
+    return False
+
+
 def entry_param_names(entry_ir: "IR.FunctionDefinition") -> Tuple[str, str]:
     """
     The user's mainImage parameter names. Shadertoy permits custom names
@@ -397,7 +417,34 @@ def transpile(glsl_source: str, verbose: bool = False, common: str = "") -> Tran
     # collected here and assigned at the top of the kernel body below.
     hoisted_global_inits = list(transformer.hoisted_global_inits)
 
-    entry_ir, header_decls = partition_translation_unit(ir)
+    try:
+        entry_ir, header_decls = partition_translation_unit(ir)
+    except TranspileError:
+        # The entry point may be trapped inside a program-scope #ifdef/#ifndef
+        # that tree-sitter kept as one opaque raw block, so mainImage never
+        # became a top-level declaration. If a raw preprocessor blob holds a
+        # mainImage definition and the guarding conditional is statically
+        # decidable, evaluate it (strip_conditionals) on the pre-preprocessor
+        # source and rebuild the IR once. This branch is only reached AFTER the
+        # normal partition already failed, so shaders that transpile today are
+        # untouched (zero blast radius).
+        rescued = None
+        if _entry_trapped_in_conditional(ir):
+            stripped = strip_conditionals(glsl_raw)
+            if stripped.balanced and stripped.source != glsl_raw:
+                preprocessor = PreprocessorTransformer()
+                glsl_source = preprocessor.transform(stripped.source)
+                ast = parser.parse(glsl_source)
+                transformer = ASTTransformer(TypeChecker(
+                    create_builtin_symbol_table()))
+                transformer.user_function_return_types.update(
+                    preprocessor.matrix_macros)
+                ir = transformer.transform(ast)
+                hoisted_global_inits = list(transformer.hoisted_global_inits)
+                rescued = partition_translation_unit(ir)
+        if rescued is None:
+            raise
+        entry_ir, header_decls = rescued
     out_name, in_name = entry_param_names(entry_ir)
 
     header_opencl = ""

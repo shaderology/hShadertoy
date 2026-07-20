@@ -72,6 +72,34 @@ class TestArrayDeclarations:
         ast = parser.parse(source)
         assert ast is not None
 
+    def test_parse_type_first_array_expression_size(self):
+        """Category P tdjfWc: type-first array with an *expression* size.
+
+        `vec3[SZ*3] vertices;` must normalize to `vec3 vertices[SZ*3];`. The
+        earlier `\\w*` size group stopped at the `*`, so the type-first form
+        leaked through and tree-sitter-glsl rejected it.
+        """
+        source = "#define SZ 40\nvec3[SZ*3] vertices;\nvoid main() { }"
+        parser = GLSLParser()
+        ast = parser.parse(source)
+        assert ast is not None
+
+    def test_parse_type_first_array_arithmetic_size_local(self):
+        """`float[2*K+1] w;` — expression size in a local declaration."""
+        source = "void main() { float[2*K+1] w; }"
+        parser = GLSLParser()
+        ast = parser.parse(source)
+        assert ast is not None
+
+    def test_type_first_array_expr_does_not_touch_bracketed_comment(self):
+        """A bracketed range in a comment must NOT fuse with the next line's
+        code — the size rewrite is single-line only (regression guard for the
+        comment false positives found across the passing corpus)."""
+        from src.glsl_to_opencl.parser.glsl_parser import _normalize_array_syntax
+        source = "// remap to [0,1]\n    vec3 v0 = vec3(0.0);\n"
+        # v0's declaration must survive verbatim (not become ` = vec3(...)`).
+        assert "vec3 v0 = vec3(0.0);" in _normalize_array_syntax(source)
+
     def test_parse_2d_array(self):
         """Test 2D array."""
         source = "void main() { float arr[10][20]; }"

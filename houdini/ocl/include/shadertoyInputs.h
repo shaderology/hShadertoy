@@ -46,45 +46,100 @@ static const IMX_Layer* iChannel3;
 static float iChannelTime[4];
 static float3 iChannelResolution[4];
 
+// ---- Uniform binding setter (category AG fix + category Q carrier) ----
+// Copies the per-pixel bound values into the static-global Shadertoy uniforms.
+// DEFINED here in the header (before any transpiled user code), so its body's
+// bare uniform tokens (iTime, iResolution, ...) are compiled BEFORE a user
+// `#define iTime ...` can reach them. Every value arrives as a PARAMETER — the
+// body must never reference @-binding tokens (those map to kernel params).
+// Semantics are identical to the old SHADERTOY_INPUTS assignments (same values,
+// same order); iTimeDelta/iSampleRate stay untouched, matching the original.
+// The final param in_pix_base = (@ix, @iy) is the kernel's pixel base; the
+// setter (itself a program-scope fn, so it may call get_global_id()) derives
+// the gl_FragCoord offset from it — keeping that arithmetic OUT of the macro.
+static void shadertoy_bind_inputs(
+    float3 in_iResolution,
+    float in_iTime,
+    float in_iFrameRate,
+    int in_iFrame,
+    float4 in_iMouse,
+    float4 in_iDate,
+    const IMX_Layer* in_iChannel0,
+    const IMX_Layer* in_iChannel1,
+    const IMX_Layer* in_iChannel2,
+    const IMX_Layer* in_iChannel3,
+    float3 in_iChannelResolution0,
+    float3 in_iChannelResolution1,
+    float3 in_iChannelResolution2,
+    float3 in_iChannelResolution3,
+    int2 in_pix_base)
+{
+    iResolution = in_iResolution;
+    iTime = in_iTime;
+    iFrameRate = in_iFrameRate;
+    iFrame = in_iFrame;
+    iMouse = in_iMouse;
+    iDate = in_iDate;
+    iChannel0 = in_iChannel0;
+    iChannel1 = in_iChannel1;
+    iChannel2 = in_iChannel2;
+    iChannel3 = in_iChannel3;
+    iChannelTime[0] = in_iTime;
+    iChannelTime[1] = in_iTime;
+    iChannelTime[2] = in_iTime;
+    iChannelTime[3] = in_iTime;
+    iChannelResolution[0] = in_iChannelResolution0;
+    iChannelResolution[1] = in_iChannelResolution1;
+    iChannelResolution[2] = in_iChannelResolution2;
+    iChannelResolution[3] = in_iChannelResolution3;
+    // Category Q carrier: seed the uniform gid->pixel offset DECLARED IN
+    // glslHelpers.h (included above; it also defines the GLSL_glFragCoord()
+    // accessor helpers call). Benign same-value race: identical value written
+    // by every work-item under tilesize==1 (the proven cook geometry, where
+    // fragCoord == get_global_id() exactly, so the offset is 0). pixel =
+    // get_global_id() + off recovers each work-item's own pixel in ANY
+    // function; the seed self-corrects any future *uniform* launch-offset
+    // shift. Seeding here (not in transpiler-emitted entry glue) covers every
+    // kernel unconditionally, with no transpiler emission required.
+    GLSL_glFragCoord_off = in_pix_base - (int2)(get_global_id(0), get_global_id(1));
+}
+
 
 #ifdef CUBEMAP_RENDERPASS
+    // DO_CUBEMAP only mentions shadertoy_cubemap_bind, rayDir and @-tokens —
+    // the `&iResolution` token is hidden inside the header-defined wrapper so a
+    // user `#define iResolution ...` cannot poison it.
     #define DO_CUBEMAP \
         float3 rayDir; \
-        shadertoy_cubemap(@ix,@iy,@xres,@yres,&rayDir,&iResolution);
+        shadertoy_cubemap_bind(@ix,@iy,@xres,@yres,&rayDir);
 #else
     #define DO_CUBEMAP /* nothing */
 #endif
 
-// !!! KNOWN TRAP (category AG): SHADERTOY_INPUTS expands inside the kernel,
-// AFTER the transpiled user code. A shader that object-like-#defines a uniform
-// (e.g. `#define iTime GLSL_mod(iTime, 20.0f)` — legal on Shadertoy, uniforms
-// are read-only there) rewrites these assignment LHSs into non-lvalues ->
-// "expression is not assignable". Two fixes exist:
-//   1. LIVE (transpiler, merged 2026-07-14): the transpiler emits an
-//      #undef/re-define push-pop around SHADERTOY_INPUTS — see
-//      src/glsl_to_opencl/preprocessor/uniform_redefine.py.
-//   2. ROOT-CAUSE (this header): move all uniform assignments into a
-//      shadertoy_bind_inputs() setter — full proven implementation at the
-//      BOTTOM OF THIS FILE. Adopt it whenever this header gets restructured.
+// SHADERTOY_INPUTS opens every kernel body. It no longer contains any bare
+// Shadertoy uniform name-token: all uniform assignments are delegated to
+// shadertoy_bind_inputs() (defined above, before user #defines). Only the
+// kernel-scope locals fragCoord/fragColor (read by the transpiled glue) and
+// @-binding tokens remain — neither is poisonable by a user `#define iTime`.
+// The trailing (int2)(@ix, @iy) hands the pixel base to the setter so it can
+// derive the uniform gl_FragCoord offset (category Q enabler).
 #define SHADERTOY_INPUTS \
-    iResolution = (float3)(@xres, @yres, 0.0f); \
-    iTime = @Time; \
-    iFrameRate = @iFrameRate; \
-    iFrame = @iFrame; \
-    iMouse = @iMouse;\
-    iDate = @iDate;\
-    iChannel0 = @iChannel0.layer; \
-    iChannel1 = @iChannel1.layer; \
-    iChannel2 = @iChannel2.layer; \
-    iChannel3 = @iChannel3.layer; \
-    iChannelTime[0] = @Time; \
-    iChannelTime[1] = @Time; \
-    iChannelTime[2] = @Time; \
-    iChannelTime[3] = @Time; \
-    iChannelResolution[0] = (float3)(@iChannel0.res, 0.0f); \
-    iChannelResolution[1] = (float3)(@iChannel1.res, 0.0f); \
-    iChannelResolution[2] = (float3)(@iChannel2.res, 0.0f); \
-    iChannelResolution[3] = (float3)(@iChannel3.res, 0.0f); \
+    shadertoy_bind_inputs( \
+        (float3)(@xres, @yres, 0.0f), \
+        @Time, \
+        @iFrameRate, \
+        @iFrame, \
+        @iMouse, \
+        @iDate, \
+        @iChannel0.layer, \
+        @iChannel1.layer, \
+        @iChannel2.layer, \
+        @iChannel3.layer, \
+        (float3)(@iChannel0.res, 0.0f), \
+        (float3)(@iChannel1.res, 0.0f), \
+        (float3)(@iChannel2.res, 0.0f), \
+        (float3)(@iChannel3.res, 0.0f), \
+        (int2)(@ix, @iy)); \
     float2 fragCoord = @fragCoord; \
     if (!@fragCoord.bound) { fragCoord = (float2)(@ix, @iy); }\
     float4 fragColor = (float4)(0.0f, 0.0f, 0.0f, 1.0f); \
@@ -143,97 +198,12 @@ static void shadertoy_cubemap(int ix, int iy, int xres, int yres,
     }
 }
 
-/* ============================================================================
-   PROVEN REDESIGN — shadertoy_bind_inputs() setter (NOT yet in the HDA)
-   ============================================================================
-   Root-cause fix for the category-AG uniform-#define collision (and any future
-   "user macro poisons SHADERTOY_INPUTS" bug): no Shadertoy uniform name-token
-   may appear inside a macro that expands AFTER user code. All assignments move
-   into functions DEFINED HERE (compiled before any user #define can reach
-   them); values arrive as arguments from the @-bindings at the call site.
-
-   PROVENANCE: implemented + proven 2026-07-14 on branch fix/header-ag1-setter-main
-   (commit 5c379d93): full 862-shader PASS-set re-test
-   against tests/ocl/main_header.cl -> 0 regressions, +2 (XdyBW1, MtXBDf);
-   guard unit test tests/unit/test_header_uniform_redefine_guard.py (on that
-   branch) asserts no uniform token survives in SHADERTOY_INPUTS/DO_CUBEMAP.
-   An opt-in builder wiring prototype (HSHADERTOY_LIVE_HEADER=1 populates the
-   HDA code_header parm from this file) is on the same branch in builder.py.
-
-   TO ADOPT in the HDA code_header:
-     1. Paste the two functions below AFTER the static uniform globals.
-     2. Replace the assignment lines of SHADERTOY_INPUTS with the single
-        shadertoy_bind_inputs(...) call shown; keep the fragCoord/fragColor
-        lines and DO_CUBEMAP (they are kernel-scope locals, not uniforms).
-     3. In DO_CUBEMAP call shadertoy_cubemap_bind(@ix,@iy,@xres,@yres,&rayDir)
-        instead of shadertoy_cubemap(...,&iResolution) — the bare &iResolution
-        token is poisonable too.
-     4. The transpiler-side push-pop (uniform_redefine.py) stays: it becomes a
-        harmless no-op safety net.
-
-static void shadertoy_bind_inputs(
-    float3 in_iResolution,
-    float in_iTime,
-    float in_iFrameRate,
-    int in_iFrame,
-    float4 in_iMouse,
-    float4 in_iDate,
-    const IMX_Layer* in_iChannel0,
-    const IMX_Layer* in_iChannel1,
-    const IMX_Layer* in_iChannel2,
-    const IMX_Layer* in_iChannel3,
-    float3 in_iChannelResolution0,
-    float3 in_iChannelResolution1,
-    float3 in_iChannelResolution2,
-    float3 in_iChannelResolution3)
-{
-    iResolution = in_iResolution;
-    iTime = in_iTime;
-    iFrameRate = in_iFrameRate;
-    iFrame = in_iFrame;
-    iMouse = in_iMouse;
-    iDate = in_iDate;
-    iChannel0 = in_iChannel0;
-    iChannel1 = in_iChannel1;
-    iChannel2 = in_iChannel2;
-    iChannel3 = in_iChannel3;
-    iChannelTime[0] = in_iTime;
-    iChannelTime[1] = in_iTime;
-    iChannelTime[2] = in_iTime;
-    iChannelTime[3] = in_iTime;
-    iChannelResolution[0] = in_iChannelResolution0;
-    iChannelResolution[1] = in_iChannelResolution1;
-    iChannelResolution[2] = in_iChannelResolution2;
-    iChannelResolution[3] = in_iChannelResolution3;
-}
-
-// Keeps the poisonable `&iResolution` token out of DO_CUBEMAP.
-// (needs shadertoy_cubemap declared/defined above it)
+// Cubemap binding wrapper (category AG fix): keeps the `&iResolution` token
+// OUT of the DO_CUBEMAP macro body so a user `#define iResolution ...` cannot
+// poison it. Defined here (before user code); DO_CUBEMAP only mentions this
+// name, `rayDir`, and @-binding tokens. Body forwards to shadertoy_cubemap().
 static void shadertoy_cubemap_bind(int ix, int iy, int xres, int yres,
                                    float3* rayDir)
 {
     shadertoy_cubemap(ix, iy, xres, yres, rayDir, &iResolution);
 }
-
-#define SHADERTOY_INPUTS \
-    shadertoy_bind_inputs( \
-        (float3)(@xres, @yres, 0.0f), \
-        @Time, \
-        @iFrameRate, \
-        @iFrame, \
-        @iMouse, \
-        @iDate, \
-        @iChannel0.layer, \
-        @iChannel1.layer, \
-        @iChannel2.layer, \
-        @iChannel3.layer, \
-        (float3)(@iChannel0.res, 0.0f), \
-        (float3)(@iChannel1.res, 0.0f), \
-        (float3)(@iChannel2.res, 0.0f), \
-        (float3)(@iChannel3.res, 0.0f)); \
-    float2 fragCoord = @fragCoord; \
-    if (!@fragCoord.bound) { fragCoord = (float2)(@ix, @iy); }\
-    float4 fragColor = (float4)(0.0f, 0.0f, 0.0f, 1.0f); \
-    DO_CUBEMAP
-
-   ========================================================================= */

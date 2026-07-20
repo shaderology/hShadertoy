@@ -3164,16 +3164,14 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1685:58: error: use of undeclared identifier 'gl_FragCoord' | <kernel>:1703:47: error: use of undeclared identifier 'gl_FragCoord'",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XtSGRV/Image"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "llj3zV": {
     "id": "llj3zV",
@@ -3421,17 +3419,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Could not find mainImage() function in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/lljGDm/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "ltj3Dc": {
     "id": "ltj3Dc",
@@ -12437,28 +12433,24 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1562:17: error: use of undeclared identifier 'gl_FragCoord'",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/Mt3GDl/Image"
       },
       {
         "pass": "buffer",
         "name": "Buf A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1562:17: error: use of undeclared identifier 'gl_FragCoord'",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/Mt3GDl/Buf_A"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "Xld3Ws": {
     "id": "Xld3Ws",
@@ -12631,10 +12623,10 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "Q"
+          "AF"
         ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1538:63: error: use of undeclared identifier 'gl_FragCoord'",
+        "difficulty": "med",
+        "error_excerpt": "<kernel>:1638:20: error: too many elements in vector initialization (expected 2 elements, have 3)",
         "artifact": "artifacts/Mty3zh/Image"
       }
     ],
@@ -17260,16 +17252,14 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1564:18: error: use of undeclared identifier 'gl_FragCoord'",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XsfyDl/Image"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "4ssyWs": {
     "id": "4ssyWs",
@@ -17403,17 +17393,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 48, col 12): Syntax error at line 48, column 12",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4sjcz1/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "4s2cRW": {
     "id": "4s2cRW",
@@ -17883,23 +17871,21 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1648:22: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1648:47: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1648:131: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1725:9: error: invalid conversion between vector type 'int ",
+        "error_excerpt": "<kernel>:1747:22: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1747:47: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1747:131: error: invalid conversion between vector type 'int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) and integer type 'bool' of different size | <kernel>:1824:9: error: invalid conversion between vector type 'int ",
         "artifact": "artifacts/MsBczy/Image"
       },
       {
         "pass": "buffer",
         "name": "Buf A",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "G"
-        ],
-        "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 1, col 1): Syntax error in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/MsBczy/Buf_A"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "COMPILE_FAIL"
   },
   "4dSyRK": {
     "id": "4dSyRK",
@@ -23299,7 +23285,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1601:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1733:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1675:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1783:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/XljczK/Buffer_A"
       },
       {
@@ -25230,40 +25216,34 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1764:17: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XlSBRW/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1780:16: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XlSBRW/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1565:17: error: use of undeclared identifier 'gl_FragCoord' | <kernel>:1728:13: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XlSBRW/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "ltBfRD": {
     "id": "ltBfRD",
@@ -26251,7 +26231,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1662:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1790:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1736:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1840:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/4d3yDn/Buffer_A"
       },
       {
@@ -35664,7 +35644,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1647:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1724:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/wd2GRh/Image"
       },
       {
@@ -35686,7 +35666,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1651:18: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1726:18: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/wd2GRh/Buffer_B"
       }
     ],
@@ -37277,7 +37257,7 @@
           "V"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1671:13: error: unexpected type name 'uint': expected expression | <kernel>:1691:8: error: expected expression | <kernel>:1692:23: error: unexpected type name 'uint': expected expression | <kernel>:1699:50: error: unexpected type name 'uint': expected expression",
+        "error_excerpt": "<kernel>:1745:13: error: unexpected type name 'uint': expected expression | <kernel>:1765:10: error: expected expression | <kernel>:1766:23: error: unexpected type name 'uint': expected expression | <kernel>:1773:50: error: unexpected type name 'uint': expected expression",
         "artifact": "artifacts/3dlSzs/Buffer_A"
       },
       {
@@ -37290,7 +37270,7 @@
           "V"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1671:13: error: unexpected type name 'uint': expected expression | <kernel>:1691:8: error: expected expression | <kernel>:1692:23: error: unexpected type name 'uint': expected expression | <kernel>:1699:50: error: unexpected type name 'uint': expected expression",
+        "error_excerpt": "<kernel>:1745:13: error: unexpected type name 'uint': expected expression | <kernel>:1765:10: error: expected expression | <kernel>:1766:23: error: unexpected type name 'uint': expected expression | <kernel>:1773:50: error: unexpected type name 'uint': expected expression",
         "artifact": "artifacts/3dlSzs/Buffer_B"
       }
     ],
@@ -38658,13 +38638,11 @@
       {
         "pass": "buffer",
         "name": "Buffer A",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to transform GLSL: FloatLiteral must end with 'f': 0.95100F",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3lX3Rr/Buffer_A"
       },
       {
@@ -38678,7 +38656,7 @@
         "artifact": "artifacts/3lX3Rr/Buffer_B"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "WtlGzr": {
     "id": "WtlGzr",
@@ -40001,16 +39979,14 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1675:22: error: use of undeclared identifier 'gl_FragCoord' | <kernel>:1675:38: error: use of undeclared identifier 'gl_FragCoord'",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3t2GRD/Image"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "tlBGzm": {
     "id": "tlBGzm",
@@ -40092,7 +40068,7 @@
           "AJ"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:5053:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5054:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5055:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5056:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:5103:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5104:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5105:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5106:71: error: invalid operands to binary expression ('int' and 'float')",
         "artifact": "artifacts/ttfGRB/Image"
       },
       {
@@ -40106,7 +40082,7 @@
           "J"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:5069:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5070:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5071:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5072:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:5119:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5120:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5121:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5122:71: error: invalid operands to binary expression ('int' and 'float')",
         "artifact": "artifacts/ttfGRB/Buffer_A"
       },
       {
@@ -40118,7 +40094,7 @@
           "AJ"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:5196:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5197:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5198:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5199:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:5246:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5247:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5248:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5249:71: error: invalid operands to binary expression ('int' and 'float')",
         "artifact": "artifacts/ttfGRB/Buffer_B"
       },
       {
@@ -40130,7 +40106,7 @@
           "AJ"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:6285:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6286:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6287:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6288:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:6339:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6340:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6341:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6342:71: error: invalid operands to binary expression ('int' and 'float')",
         "artifact": "artifacts/ttfGRB/Buffer_C"
       },
       {
@@ -40142,7 +40118,7 @@
           "AJ"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:5186:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5187:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5188:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5189:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:5236:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5237:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5238:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5239:71: error: invalid operands to binary expression ('int' and 'float')",
         "artifact": "artifacts/ttfGRB/Buffer_D"
       }
     ],
@@ -44510,64 +44486,54 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1851:13: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'? | <kernel>:1857:9: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'? | <kernel>:1860:14: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'? | <kernel>:1863:14: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3dK3zR/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1902:16: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3dK3zR/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1753:17: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3dK3zR/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1625:26: error: use of undeclared identifier 'gl_FragCoord' | <kernel>:1755:17: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3dK3zR/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "Q"
-        ],
-        "difficulty": "low",
-        "error_excerpt": "<kernel>:1780:13: error: use of undeclared identifier 'gl_FragCoord'; did you mean 'fragCoord'?",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3dK3zR/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "WsK3DK": {
     "id": "WsK3DK",
@@ -51046,7 +51012,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1664:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1820:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1826:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "error_excerpt": "<kernel>:1738:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1870:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1876:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
         "artifact": "artifacts/3tVSRG/Image"
       },
       {
@@ -51070,7 +51036,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1664:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1788:13: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "error_excerpt": "<kernel>:1738:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1838:13: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
         "artifact": "artifacts/3tVSRG/Buffer_A"
       }
     ],
@@ -53659,7 +53625,7 @@
           "P"
         ],
         "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 3, col 34): Syntax error at line 3, column 34",
+        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 8, col 121): Syntax error at line 8, column 121",
         "artifact": "artifacts/tsSyWG/Image"
       }
     ],
@@ -54498,13 +54464,11 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Could not find mainImage() function in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wssBz2/Image"
       },
       {
@@ -54540,17 +54504,15 @@
       {
         "pass": "buffer",
         "name": "Buffer D",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Could not find mainImage() function in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wssBz2/Buffer_D"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "3slBRf": {
     "id": "3slBRf",
@@ -56045,17 +56007,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 9, col 12): Syntax error at line 9, column 12",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tdjfWc/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "wsSBWt": {
     "id": "wsSBWt",

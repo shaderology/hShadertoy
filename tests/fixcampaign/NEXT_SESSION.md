@@ -1,151 +1,109 @@
-# NEXT SESSION → Session 56: **category Q (gl_FragCoord in helpers) + P (parse residual)** — OWNER IS DIGGING FIRST
+# NEXT SESSION → Session 62: **CAMPAIGN PAUSED (owner, 2026-07-20)** — awaiting a direction decision
 
-**READ FIRST, in this order, then execute:**
+> **PAUSED at 1365/1499.** Session 61 exhausted the cheap, no-approval P
+> singles: every remaining P and N pass now needs macro-expander (category N) or
+> category-G (`#define`-splits-statement) STRUCTURAL work, which is the owner's
+> approval gate — and the owner chose to pause rather than authorize it (or a
+> pivot) at the end of S61. **Do NOT start category N / G / P-macro work without
+> the owner re-authorizing a direction.** When the owner resumes, the live
+> options (from the S61 ask) are:
+> 1. **Gated P-macro extension** — extend the S24 function-macro expander for the
+>    parse-FAILING P shapes (ldfXzB object→function macro + `#undef`/redefine;
+>    3t2XzW token-paste; ldfyRn macro-DSL). Gated on parse-failure ⇒ 0-regression
+>    on passing shaders by construction. ~3-4 P passes; hard preprocessor
+>    semantics but bounded blast radius. *(was the recommended path.)*
+> 2. **Category N compile-stage** — the 75-pass bucket (`ivec2(U)` in `#define`
+>    bodies); highest payoff, highest regression risk (expander must run on
+>    already-parsing shaders).
+> 3. **Pivot to another top bucket** with possible localized no-approval wins:
+>    B=24, X=15, K=13, D=12.
+>
+> Once the owner picks, rewrite this file for that session and follow the normal
+> protocol below.
+
+**READ FIRST, in this order, then execute (when un-paused):**
 1. `tests/fixcampaign/README.md` — workflow & guardrails (TDD, full unit suite
    green, **0 PASS→FAIL regressions**, commit rules, Houdini smoke +
    `python tests/rendercompare/rc.py smoke` render-correctness gate — run BOTH).
-2. this file — the **Q and P findings** below were gathered in Session 55; the
-   owner asked to do their own digging on Q/P before we implement, so treat
-   these as a briefing, not a locked plan. **Q's fix is a MAJOR REDESIGN —
-   confirm the approach with the owner before coding (guardrail: major redesigns
-   need approval).**
-3. The **Q and B rows in `tests/fixcampaign/BACKLOG.md`** (grep `### Q`, `### B`).
+2. this file.
+3. The relevant BACKLOG rows (the `P` table row; `### N`/the `N` table row for
+   the approval item).
 
-## Houdini 22 note (still current)
-Houdini **22.0.368** is the default gate target; both gates run **exit 0
-unpinned** (verified S53/S54/S55). If a gate ever fails with
-`ModuleNotFoundError: tree_sitter`, that's a stale hython env — re-pin
-`$env:HYTHON = '...Houdini 21.0.440\bin\hython.exe'` and tell the owner.
+## State after Session 61 (2026-07-20) — PAUSED
+- Session 61 was **triage-only, no code change** (see PROGRESS.md S61). The last
+  two un-triaged P singles (ldfXzB, 3t2XzW) were root-caused as category-N
+  macro-expander work. Corpus unchanged: **1365/1499 PASS.** Unit **2154 + 6**.
 
----
+## State after Session 60 (2026-07-20)
+- **More P singles (+2, 1363→1365, 0 regressed):** expression-size type-first
+  array decl (tdjfWc `vec3[SZ*3]`) — broadened `_TYPE_FIRST_ARRAY_DECL`'s size
+  group AND pinned it single-line (a multi-line match fused a bracketed comment
+  range with the next line's identifier); `(bool(x) ? …)` cast-ambiguity
+  (4sjcz1) — new `_PAREN_BOOL_CTOR` inserts identity `!!`. Both in
+  `_normalize_array_syntax` (`glsl_parser.py`), same family as S22/S23.
+- Corpus: **1365/1499 PASS.** Top failing: N=75, B=24, X=15, K=13, G=12, D=12.
+- Unit baseline: **2154 passed + 6 skipped.**
+- H22 migration remains fully validated; `HSHADERTOY_LIVE_HEADER=1`,
+  `shadertoyInputs.h` LIVE. Treat header edits with campaign-proof discipline.
+- If the owner hasn't committed the H22 changeset yet (HDA, main_header.cl,
+  main_kernel.cl, build_options.json, `*_h21/_h22` archives, ledger.json), it
+  may appear as uncommitted WIP — **do not stage or revert it.**
 
-## CATEGORY Q — `gl_FragCoord` used in HELPER functions  (14 fails / 7 shaders, all sole-blockers)
+## PRIORITY 1 — the LAST cheap P parse-error singles (no approval needed)
+`corpus.py list P` is live truth. The remaining sole-blocker P singles are each
+their own root cause and the cheap ones are getting thin — root-cause FRESH from
+`tests/campaign/cache/<id>.json` and check the pattern isn't already handled by
+`_normalize_array_syntax` (`glsl_parser.py`). Triaged in S60:
+- **ldfXzB** (`#undef PRIM` cascade at L615) and **3t2XzW** (error at
+  post-Common line ~290) — NOT yet root-caused; look first, they *may* be
+  localized.
+- **3d23Dc**, **wsByWz** — a `#define` appears mid-expression, splitting a
+  statement across a preprocessor directive → **category G** (preprocessor
+  splits statements; HIGH-risk/redesign — needs owner approval, don't attempt
+  as a "single").
+- **ldfyRn** — macro-DSL (`c(...) C(...) path(style(...))`) → **category N**.
+- **tsSyWG** — golf shader calling `mainSound(in int samp, …)` INSIDE mainImage
+  (a param declaration in call-arg position); genuinely malformed idiom →
+  **edge case, skip** per scope policy.
+If no cheap P single remains after looking at ldfXzB/3t2XzW, go to Priority 2.
 
-**Every Q sole-blocker fails on the identical error:** `use of undeclared
-identifier 'gl_FragCoord'`. The ENTRY-body case is already handled (Session-Q
-injected a `float4 gl_FragCoord = (float4)(fragCoord, 0.0f, 1.0f);` local at the
-top of `mainImage` — see `_transform_function_definition` ~line 3611). The 7
-remaining shaders all reference `gl_FragCoord` **outside the entry body**, where
-that injected local is out of scope.
+## PRIORITY 2 (owner approval required) — category N (75 passes, biggest bucket)
+Macro-expander structural work — write the design into the BACKLOG N row and
+ASK before implementing. Stop and ask the owner for this one. Note the P
+residual (4djfDR, tlsSDs mainImage-as-macro; ldfyRn macro-DSL; the `#define`-
+splits-statement pair) largely funnels into the N/G preprocessor work, so an
+N session may retire several P passes too.
 
-**Where each shader uses it (verified from cache source, Session 55):**
-- `3t2GRD` — helper `rand` (+ a custom `main`)
-- `Mt3GDl` — helper `map` (image + Buf A)
-- `Mty3zh` — helper `sdlineRoundTile`
-- `XsfyDl` — helper `draw_char`
-- `XtSGRV` — `mainImage` + helpers `map`, `softshadow`
-- `XlSBRW` — via `#define F gl_FragCoord`, `F` used in helpers (image + 2 buffers)
-- `3dK3zR` — via `#define F gl_FragCoord` in the **Common** pass (merged into all)
+## Deferred follow-ups (grab if blocked)
+- **Mty3zh** (ex-Q): AF ctor-overflow `vec2(hashRace(...), gl_FragCoord.xy/
+  iResolution.xy)`; precedent = `_truncate_overflow_ctor_args` (S45 family).
+- **rendercompare:** README caveat — wgpu-shadertoy's raw `gl_FragCoord.y` is
+  the FLIP of its own `fragCoord.y` (proven S56; HDA side is faithful) →
+  Q-shader compares vs wgpu mis-verdict. Consider a reference-free
+  self-checking smoke shader (green iff helper gl_FragCoord == entry
+  fragCoord) so `rc.py smoke` guards the geometry assumption end-to-end.
 
-**Why there's no cheap fix (Session 55 dug this out):**
-`gl_FragCoord.xy` == Shadertoy `fragCoord` == the pixel-center coordinate. But:
-- `fragCoord` is a **kernel-body local** (`SHADERTOY_INPUTS` macro,
-  `tests/ocl/main_header.cl` ~line 1492: `float2 fragCoord = AT_fragCoord;`
-  with fallback `(float2)(AT_ix, AT_iy)`). Not visible in helpers.
-- `AT_ix`/`AT_iy` = `_bound_gidx`/`_bound_gidy` (main_header.cl lines 7-8) —
-  **kernel `#bind` params**, also only in scope inside the kernel body.
-- OpenCL **cannot** hold a per-work-item value in a program-scope global
-  (program-scope is `__global`/`__constant`, shared across work-items → race).
-  So "make gl_FragCoord a global" does NOT work.
-- `get_global_id(0/1)` IS callable from any function, BUT Houdini's COP runover
-  is not guaranteed to be a raw 1:1 pixel grid (tiling/offset via `_bound_*`),
-  so using it would risk a "compiles but renders wrong" bug — exactly what
-  `rc.py smoke` guards against. **Do not go this route without a render-compare
-  proof on a multi-tile cook.**
-
-**⇒ The correct fix is to THREAD the coordinate through the call graph** (the
-existing code comment calls this "a larger redesign" and deliberately left it
-unfixed). Proposed design (**for owner approval before implementing**):
-1. **Reachability pre-scan:** mark every user function whose body references
-   `gl_FragCoord` (directly, or via an object-macro alias like `#define F
-   gl_FragCoord` — resolve those first), OR that CALLS a marked function
-   (transitive closure over the call graph; handle recursion/forward calls like
-   `_collect_function_renames` does).
-2. **Signature rewrite:** append a synthetic `float2 _fragCoord` (or `float4
-   gl_FragCoord`) param to each marked function. **WATCH the arity collision:**
-   `function_signatures` is keyed by parameter count to disambiguate overloads
-   (`_transform_function_definition` ~line 3571, and the call-site resolver) —
-   adding a param shifts arity and can alias a real overload. The threaded param
-   must be tracked so the call-site resolver counts the ORIGINAL arity.
-3. **Call-site rewrite:** at every call to a marked function, pass the in-scope
-   coordinate (the entry passes its `fragCoord`; a marked helper passes its own
-   threaded param through).
-4. **Read resolution:** inside a marked function, `gl_FragCoord` reads resolve
-   to the threaded param (build the `.xy`/`float4` shape at the read site or as
-   a one-line local alias at function top, mirroring the entry injection).
-5. Interactions to test: the object-macro alias (`#define F gl_FragCoord`), the
-   Common-pass merge (3dK3zR), D2 function renames, the out-param `&`/deref
-   machinery, and multi-pass buffers. Blast radius = only shaders using
-   gl_FragCoord in helpers (all currently FAILING → low PASS-set risk) but the
-   transform touches the shared signature/call-site paths → **hash rig +
-   full-corpus re-test mandatory.**
-
-**Value:** up to +7 shaders / 14 passes — the single most homogeneous bucket
-after N. **Owner is investigating Q first; align with them before coding.**
-
----
-
-## CATEGORY P — parse-stage residual  (15 fails / 14 shaders)  — HETEROGENEOUS, no single slice
-
-Session 55 spot-checked the "Could not find mainImage()" sub-cluster; it is
-**at least 3 different root causes**, not one fix:
-- **mainImage defined as a MACRO** — `4djfDR` (`#define mainImage(C,U) C.xy=...`)
-  and `tlsSDs` (`#define mainImage(z,u) \ ...`). The entry detector looks for a
-  `void mainImage(...)` FUNCTION; a macro-defined entry is invisible. Would need
-  the macro expander to materialize it (N-adjacent).
-- **cubemap false-positive** — `3tVSRG`: the failing pass is the CUBEMAP pass
-  (has `mainCubemap`, not `mainImage`); the mainImage-only campaign harness
-  can't test it. NOT a real transpiler bug — a harness limitation. Its image +
-  buffer passes are fine.
-- **genuinely odd** — `wssBz2` and `lljGDm` both contain a normal
-  `void mainImage(out vec4 fragColor, vec2 fragCoord)` yet still report "not
-  found". Root-cause these two FRESH (likely a parse error earlier in the file
-  aborts detection, or a commented-out `/*void mainImage...*/` decoy in lljGDm).
-The rest of P is assorted one-off `ParseError(line N, col M)` at distinct
-constructs (3d23Dc, 3t2XzW, 4sjcz1, ldfXzB, ldfyRn, tdjfWc, tsSyWG, wsByWz) +
-`FloatLiteral must end with 'f': 0.95100F` (3lX3Rr — an uppercase-`F` float
-suffix the normalizer misses; **this one looks genuinely cheap** — extend the
-float-suffix handling to accept `F`). **Recommendation: if picking P, start with
-3lX3Rr (uppercase F suffix) as a clean single, then the wssBz2/lljGDm pair.**
-
----
+## Houdini / environment notes
+- Gates green unpinned on **22.0.368** through S60, with the live header.
+- **After any Houdini version/build change: run
+  `python tests/fixcampaign/probe_launch_geometry.py` FIRST** (exit 0
+  required). If it fails, the gid-derived gl_FragCoord accessor is unsafe on
+  that build → fallback is branch `fix/q-fragcoord-threading` @ 78d01832. The
+  H22 setter is the SOLE seeder of `GLSL_glFragCoord_off` (S58); the probe
+  exercises that path.
+- Harness background tasks die at ~2 h — long corpus runs must be
+  chunk-resumable (`full_retest_s57.py <start-offset>` pattern) or owner-run.
 
 ## Gates & proof recipe (same as always)
-- Unit suite: `python -m pytest tests/unit/ -q` — **baseline 2134 passed + 6
-  skipped** (S55 added 2 in `test_transformer_pointer_param_shadow.py`). Add
-  failing repro tests FIRST.
-- Corpus: back up `tests/campaign/ledger.json` to scratch FIRST. Q's threading
-  touches shared signature/call-site paths → **hash blast-radius rig mandatory**
-  (recipe below) + full-corpus re-test. Re-test changed ids `--force`;
-  currently-FAILING ids are slow — ≤10-id batches.
-- Delta: diff PASS-sets between ledger backup and live ledger directly (Python
-  set diff on `overall=='PASS'`). **REGRESSED must be 0.** Don't trust
-  `corpus.py delta`'s lists.
-- Houdini: `houdini_smoke.py` AND `rc.py smoke`, both exit 0, main tree on the
-  fix branch. **For Q especially, `rc.py smoke` is the critical gate** (a wrong
-  coordinate compiles fine but renders wrong).
-
-## `hash_outputs.py` blast-radius rig (recreate in scratch each session)
-Does NOT persist. ~30 lines: iterate `cache/*.json`, for each testable pass
-(image/buffer/cubemap) `transpile(code, common=common)`, sha1 of
-`get_header()+get_kernel()`. Run once per tree:
-`--tree <repo_root> --cache <repo>/tests/campaign/cache --out <win-path.json>`.
-Baseline: `git worktree add --detach <scratch>/main-wt HEAD`; diff the two hash
-maps → changed-id set; `git worktree remove --force` after. WINDOWS TRAP: the
-rig `os.chdir`s into the tree — pass `--out` as a full Windows path (use
-`cygpath -w`). ~2-3 min/tree. S55 used it to prove the pointer-shadow fix
-changed **exactly 1 pass** (tsXBzs) corpus-wide.
-
-## Baselines (after Session 55)
-- Unit suite: **2134 passed + 6 skipped, 0 failed.**
-- Corpus: **1354 / 1499 PASS.** Top failing passes: N=75 B (macro-residual) P=15 X≈15 Q=14 G=13.
-- HEAD after merge = the S55 merge commit of `fix/transpiler-b-pointer-shadow`.
+- Unit suite: `python -m pytest tests/unit/ -q` — **baseline 2154 passed + 6
+  skipped.** Add failing repro tests FIRST.
+- Corpus: back up `tests/campaign/ledger.json` to scratch FIRST; re-test
+  changed ids `--force` (≤10-id batches for failing ids); delta = direct
+  Python set-diff on `overall=='PASS'`; **REGRESSED must be 0.**
+- Blast radius: for a pre-parse normalizer change, enumerate the EXACT set of
+  changed ids by diffing OLD.sub vs NEW.sub over the corpus cache (as in S60) —
+  and diff over the currently-PASS shaders specifically to catch comment/false-
+  positive rewrites before they regress anything.
+- Houdini: `houdini_smoke.py` AND `rc.py smoke`, both exit 0, main tree.
 - The owner keeps uncommitted WIP in the tree — never stage files you didn't
   change; stage your files by name.
-
-## Progress this arc (context — do NOT redo)
-S51 **+12** (A3+A1), S52 **+10** (A2 — A closed), S53 **+35** (E — preproc
-routing, campaign record), S54 **+5** (X square-matrix spellings), S55 **+1** (B
-pointer-param scope-shadow; B residual now all macro-textual). Remaining big
-buckets: **N** (macro-expander, STRUCTURAL / NEEDS-APPROVAL), **Q** (gl_FragCoord
-threading — redesign, owner digging), and the P/G/X tails.

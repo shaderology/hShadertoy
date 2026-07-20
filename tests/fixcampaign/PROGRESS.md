@@ -2999,3 +2999,286 @@ cache hits; 1002 remaining).
   macro-textual/pointer (owner-approval / N-J redesign territory).** Q and P
   re-triage findings written to NEXT_SESSION.md for Session 56 (owner is digging
   into those).
+
+## Session 56 — 2026-07-17 — **category Q CLOSED: gl_FragCoord in helpers (+6, 1354→1360)** + AG root-cause header infra merged
+
+- **Format first-of-its-kind: owner-commissioned 3-branch DESIGN COMPETITION**
+  (parallel Opus subagents in isolated worktrees, all from b97284f3), preceded
+  by a decisive empirical probe.
+- **Launch-geometry probe (NEW FACT):** a diagnostic kernel cooked through the
+  real HDA (H22.0.368, rop_image colorconversion=raw, 512x288/1024x576/513x289/
+  2048x1152) proved `fragCoord == (float2)(get_global_id(0), get_global_id(1))`
+  EXACTLY and `get_global_size() == iResolution` EXACTLY. Overturns the S55
+  "do not go the get_global_id route" caution. Durable tool:
+  `tests/fixcampaign/probe_launch_geometry.py` (run after every Houdini change).
+- **Design A** `fix/q-fragcoord-threading` @ 78d01832 (NOT merged, kept as
+  fallback): call-graph threading, synthetic trailing `float4 gl_FragCoord`
+  param, alias-aware reachability. +6, 0 regressed, gates green. ~196 lines in
+  the signature/call-site/arity hot paths — lost on maintenance cost.
+- **Design B (WINNER, merged)** `fix/q-fragcoord-gid` @ 801c2243:
+  `GLSL_glFragCoord_off` uniform-offset static + `GLSL_glFragCoord()` accessor
+  in glslHelpers.h (live header); transpiler injects `float4 gl_FragCoord =
+  GLSL_glFragCoord();` into helpers that textually reference gl_FragCoord (or a
+  `#define F gl_FragCoord` alias) + a GATED entry seed
+  `GLSL_glFragCoord_off = (int2)(AT_ix - (int)get_global_id(0), ...)`.
+  Hash rig: exactly 14 passes / the 7 Q ids changed, 0 PASS-shaders touched.
+  **HDA probe renders BYTE-IDENTICAL to Design A's** (the empirical tiebreak).
+- **Design C (merged)** `fix/header-bindinputs-fragcoord` @ 53bd2faa+1737a77c:
+  shadertoy_bind_inputs() setter (AG root-cause, carried from
+  fix/header-ag1-setter-main) + 15th param `int2 in_pix_base` seeding the
+  offset transpiler-independently; DO_CUBEMAP → shadertoy_cubemap_bind().
+  Applied to tests/ocl/main_header.cl + shadertoyInputs.h mirror; opt-in
+  HSHADERTOY_LIVE_HEADER builder wiring; guard test. 59-shader sample 0
+  regressed. HDA adoption = REAL HANDOFF → **full H22 runbook in
+  HOUDINI_HANDOFF.md** (owner will recapture main_header/main_kernel from H22
+  + update build_options.json — currently still pointing at H21.0.440!).
+- **Merged-main proof:** unit suite **2146 passed + 6 skipped** (2134 + 9 B + 3
+  C guard); 7 Q ids re-tested `--force` under the COMBINED tree (B transpiler +
+  C restructured mirror) → all 6 flips hold, **PASS 1360/1499, REGRESSED 0**;
+  `houdini_smoke.py` AND `rc.py smoke` exit 0 on merged main; repo geometry
+  probe exit 0.
+- **FIXED (6):** 3dK3zR 3t2GRD Mt3GDl XlSBRW XsfyDl XtSGRV. **Mty3zh** stays
+  FAIL: Q resolved but unmasked an AF ctor-overflow
+  (`vec2(hashRace(...), gl_FragCoord.xy/iResolution.xy)` → 3 elements in
+  float2) — reclassified AF, for the AF/N owner.
+- **Harness bug found (render-compare):** wgpu-shadertoy's raw `gl_FragCoord.y`
+  is EXACTLY the flip of its own `fragCoord.y` (proved with a self-consistency
+  shader; on real Shadertoy they're identical). Q-shader render-compares
+  against wgpu refs will mis-verdict with a y-flip signature. The HDA side is
+  the faithful one. TODO(rendercompare): README caveat + a reference-free
+  self-checking smoke shader (emit green iff helper gl_FragCoord == entry
+  fragCoord).
+- **Ops lessons:** (1) two agents sharing the main tree's live include dir race
+  each other's corpus runs — pin worktree includes for proofs (C hit this when
+  the orchestrator checked B's commit out in the main tree mid-batch);
+  (2) fresh worktrees need the untracked `tests/fixtures/*` dirs recreated or
+  `test_dummy.py` fails (not a regression).
+
+## Session 57 — 2026-07-19 — **H22 migration VALIDATED end-to-end (0 regressions across the full corpus)**
+
+- **Owner executed the S56 runbook fully:** HDA `code_header` replaced with the
+  restructured setter form (pasted from `shadertoyInputs.h`),
+  `HSHADERTOY_LIVE_HEADER=1` enabled (shadertoyInputs.h is now LIVE — the
+  builder populates code_header from the file at build time),
+  `main_header.cl`/`main_kernel.cl`/`build_options.json` recaptured from
+  **Houdini 22.0.368**; H21 + H22 captures archived as
+  `tests/build_options_h{21,22}.json`, `tests/ocl/main_{header,kernel}_h{21,22}.cl`.
+- **Capture diff verdict (Copernicus-redesign fear did not materialize):**
+  kernel wrapper H21→H22 byte-identical (one blank line); header plumbing adds
+  only `AT_dPdx_world`/`AT_dPdy_world` (additive); build options differ only in
+  the Houdini include path (HOUDIN~1.440 → HOUDIN~1.368).
+- **Validation (all green):**
+  - `probe_launch_geometry.py` exit 0 on the NEW HDA — `fragCoord ==
+    get_global_id()` holds on H22 with the setter header; the run also
+    exercised `shadertoy_bind_inputs()` in a real cook (the probe kernel opens
+    with SHADERTOY_INPUTS).
+  - Unit suite **2146 passed + 6 skipped** (setter guard test green against
+    the fresh capture); `compilecl.py` gradient compiles.
+  - `houdini_smoke.py` AND `rc.py smoke` exit 0 (wfffRN full-stack cook +
+    3-shader render-compare, through the live header).
+  - 61-id stratified sample (12 multi-pass + 13 common + 25 plain + 6 Q
+    winners + 5 AG-history), `--force`: **1360 → 1360, 0 regressed.**
+  - **FULL PASS-set re-test, all 1360 ids `--force`** (chunked 100/batch,
+    ~3.9 h GPU total, finished by the owner after background-task lifetime
+    kills at ~2 h): **PASS 1360 → 1360, REGRESSED none, FIXED none** — a
+    perfect null delta for the environment swap.
+- **The category-Q accessor + AG setter are now live in production Houdini.**
+  Follow-up unlocked (NEXT_SESSION): retire the transpiler's now-redundant
+  entry-body `GLSL_glFragCoord_off` seed emission (the HDA setter seeds it for
+  every kernel) — needs the usual hash-rig + re-test proof.
+- Ops note: harness background tasks die at ~2 h — long corpus runs should be
+  chunk-resumable (this session's `full_retest_s57.py <start>` pattern) or
+  owner-run.
+- Owner's H22 changeset (HDA, main_header/kernel, build_options, archives) +
+  the re-tested `ledger.json` left UNCOMMITTED for the owner to commit as one
+  H22 changeset; this session commits only the campaign records.
+
+## Session 58 — 2026-07-19 — retire the redundant category-Q entry-seed emission (cleanup, NET 0, 0 regressed)
+
+- **Change:** removed the transpiler's entry-body `GLSL_glFragCoord_off =
+  (int2)(AT_ix - ..., AT_iy - ...)` seed emission from
+  `_transform_function_definition` (ast_transformer.py). Since the H22 HDA
+  setter `shadertoy_bind_inputs()` seeds the SAME offset at the top of EVERY
+  kernel body (host header `SHADERTOY_INPUTS` macro → `main_header.cl:1518` /
+  `shadertoyInputs.h:104`), the transpiler write was redundant — both produced
+  identical values. Also dropped the now-dead `_gl_fragcoord_helper_used` flag
+  and its per-function scan in `transform()`. **KEPT** (still essential): the
+  helper-local `float4 gl_FragCoord = GLSL_glFragCoord();` injection and the
+  entry's own `float4 gl_FragCoord = (float4)(fragCoord, 0.0f, 1.0f);` local;
+  the `_gl_fragcoord_token_re` that drives them is unchanged.
+- **TDD:** flipped 3 asserts in `test_transformer_glfragcoord_gid.py` from
+  `OFFSET in kernel` to `OFFSET not in kernel` (helper-direct, alias-in-helper,
+  alias-in-common cases); dropped the seed-before-entry-local ordering assert;
+  updated the module docstring. Confirmed 3 red → green after the fix. Unit
+  suite **2146 passed + 6 skipped** (unchanged baseline).
+- **Blast radius (complete, exact):** the emission was gated on a helper using
+  gl_FragCoord, so the ONLY textual change is removing that one seed line.
+  Grepping the on-disk baseline artifacts (`tests/campaign/artifacts/`, all
+  1499 present = full corpus) for `GLSL_glFragCoord_off = (int2)(AT_ix` yields
+  **exactly 7 ids**: 3dK3zR 3t2GRD Mt3GDl XlSBRW XsfyDl XtSGRV Mty3zh. Every
+  other shader's output is byte-identical — the artifacts ARE the baseline
+  outputs, so this is a full-corpus blast-radius proof without a re-transpile.
+- **Corpus proof:** re-tested those 7 `--force`. 6 Q winners stay **PASS**;
+  **Mty3zh** stays COMPILE-FAIL on AF (its unrelated `vec2(scalar, vec2)` ctor
+  overflow — unchanged). Ledger direct diff: **PASS 1360 → 1360, REGRESSED 0,
+  FIXED 0, NET 0.** (Expected: retiring a redundant statement changes no
+  pass/fail status.)
+- **Houdini gates (all exit 0, 22.0.368, live header, main tree on fix branch):**
+  `probe_launch_geometry.py` (pixel == get_global_id() + uniform offset still
+  holds now that the setter is the sole seeder), `houdini_smoke.py` (wfffRN
+  full-stack cook), `rc.py smoke` (gradient/london/digits within perceptual
+  gates).
+- **CAUTION honored:** grepped every host that DEFINES `SHADERTOY_INPUTS` /
+  seeds the offset — `main_header.cl` (H22 capture) + both archives
+  (`main_header_h21.cl:1516`, `_h22.cl:1518`) + `shadertoyInputs.h:104` ALL
+  carry the setter seed; no pre-setter host remains that could lose the offset.
+- Branch: `fix/transpiler-q-retire-seed`. Files: `ast_transformer.py`,
+  `test_transformer_glfragcoord_gid.py`, campaign records + re-tested
+  `ledger.json`/`failures.csv`/`REPORT.md` for the 7 ids.
+
+## Session 59 — 2026-07-19 — category P singles: uppercase-`F` float suffix + entry trapped in program-scope `#ifdef` (+3, 1360→1363)
+
+Two independent, tightly-scoped P fixes, both proven zero-blast-radius on
+passing shaders.
+
+- **(a) Uppercase-`F` float literal suffix — 3lX3Rr (`0.95100F`).**
+  `_transform_number_literal` (`ast_transformer.py`) appended `f` only when the
+  text ended in neither `f` nor `F`, so an `F`-suffixed literal passed through
+  unchanged and `FloatLiteral.__post_init__` (which requires a lowercase `f`)
+  raised → whole-shader transpile abort. Fix: `if text.endswith('F'): text =
+  text[:-1] + 'f'` then the existing append-if-absent. GLSL accepts both `F`/`f`;
+  OpenCL and our IR want lowercase.
+  - **Blast radius = exactly 1 shader.** Grepping every corpus cache source for
+    a decimal/exponent float ending in `F` matches ONLY 3lX3Rr. For every other
+    input the branch is behaviorally identical to before (append `f` when absent;
+    leave a lowercase-`f` literal alone) — proven by inspection of the 3 cases.
+  - Unit test: `test_ast_transformer_basic.py::test_float_literal_uppercase_f_suffix`.
+
+- **(b) Entry point trapped in a program-scope conditional — lljGDm, wssBz2.**
+  lljGDm guards its only `mainImage` with `#ifdef SIMPLE_VERSION` (`#define`d
+  in-file); wssBz2 with `#ifndef CFG_NO_POSTPROD` (only ever a commented
+  `//#define`, so undefined). tree-sitter parses a program-scope
+  `#ifdef…#endif` as ONE opaque node; the transformer's raw-text passthrough
+  (`_transform_preprocessor`, `not self._global_scope` gate from the S53 E work)
+  keeps the whole block — all 2-3 branch mainImage defs — as a single
+  `PreprocessorDirective` blob, so no top-level `mainImage` FunctionDefinition
+  exists and `partition_translation_unit` raises "Could not find mainImage()".
+  The existing `strip_conditionals` cascade (`maybe_preprocess_directives`) is
+  gated on parse-FAILURE, and these parse fine, so it never fired.
+  - **Fix (`transpile.py`):** wrap the `partition_translation_unit` call; on
+    `TranspileError`, if a raw `PreprocessorDirective` blob contains a
+    `void mainImage(` def (`_entry_trapped_in_conditional`), run
+    `strip_conditionals` on the pre-preprocessor source (`glsl_raw`) and rebuild
+    the IR once (fresh `PreprocessorTransformer` → parse → transform), then
+    re-partition. If still unresolved, re-raise the original error.
+  - **Comment-safe:** lljGDm has a block-commented `mainImage` at depth 0
+    (line 1) — but that is a `Comment` IR node, never a `PreprocessorDirective`,
+    so it neither satisfies partition nor the trapped-entry probe.
+  - **Zero blast radius by construction:** the retry lives entirely inside the
+    `except TranspileError` from partition; a shader that transpiles today never
+    enters it, and the module-level `strip_conditionals` import is inert on the
+    success path. The full retry-reachable set = the corpus's "Could not find
+    mainImage" shaders. Enumerated from the ledger: **exactly 5** —
+    lljGDm+wssBz2 now **PASS**; 3tVSRG (cubemap, uses `mainCubemap` + N
+    compile-fails on image/buffer), 4djfDR, tlsSDs (both mainImage-as-macro,
+    N-deferred per the brief) correctly stay FAIL.
+  - Unit tests: `test_transformer_conditional_entry.py` (3: `#ifdef` defined,
+    `#ifndef` undefined, block-commented-decoy).
+
+- **Gates (all green, 22.0.368, live header, main tree on fix branch):**
+  - Unit suite **2150 passed + 6 skipped** (baseline 2146 + 4 new tests).
+  - Corpus: re-tested the affected/candidate ids `--force`; ledger direct
+    set-diff on `overall=='PASS'`: **1360 → 1363, FIXED = {3lX3Rr, lljGDm,
+    wssBz2}, REGRESSED = [] (0), NET +3.** `report` regenerated
+    (top cats now N=75, B=24, X=15, G=13, K=13, D=12 — P off the top list).
+  - `houdini_smoke.py` (wfffRN full-stack cook) exit 0; `rc.py smoke`
+    (gradient/london/digits within perceptual gates) exit 0.
+- Branch: `fix/transpiler-p-conditional-entry`. Files: `ast_transformer.py`,
+  `tests/transpile.py`, `tests/unit/test_ast_transformer_basic.py`,
+  `tests/unit/test_transformer_conditional_entry.py` (new), campaign records +
+  re-tested `ledger.json`/`failures.csv`/`REPORT.md` for the affected ids.
+
+## Session 60 — 2026-07-20 — more category P singles: expression-size type-first array + `(bool(` cast-ambiguity (+2, 1363→1365)
+
+Two sibling tree-sitter parse-normalizer extensions, both in
+`_normalize_array_syntax` (`glsl_parser.py`) — the same family as the S22/S23
+cluster-1..4 rewrites.
+
+- **(c) Type-first array declaration with an EXPRESSION size — tdjfWc
+  (`vec3[SZ*3] vertices;`).** tree-sitter-glsl rejects the type-first array
+  spelling `TYPE[size] name`; `_TYPE_FIRST_ARRAY_DECL` rewrites it to
+  `TYPE name[size]`. Its size group was `(\w*)`, which stops at the `*` in
+  `SZ*3`, so the declaration leaked through un-rewritten and failed to parse.
+  Broadened the size group to `([^\]\[\n]*?)`.
+  - **Hazard found + fixed:** the naive broadening (`[^\]]`, still crossing
+    newlines) matched a bracketed range in a trailing COMMENT and fused it with
+    the next line's identifier — e.g. `// remap to [0,1]` + `\n vec3 v0 = …`
+    → `… v0[0,1]` with `v0` DELETED from its declaration. Diffing the rewrite
+    across every currently-PASS shader surfaced exactly this on the passing
+    corpus. Fix: pin the whole match to a single line (horizontal whitespace
+    `[ \t]` only, size excludes `\n`). Post-fix diff over all passing shaders:
+    only XdlcDH and tdsyR2 differ, and only inside Python-pseudocode COMMENT
+    blocks (parse-invisible) — both stay PASS.
+  - Regression guard test asserts a bracketed comment range never fuses with
+    the next line.
+
+- **(d) `(bool(x) ? a : b)` mis-parsed as the C-cast `(bool)(x)` — 4sjcz1.**
+  Identical to cluster-1's `(float(`, but `bool` was excluded there because
+  unary `+` is illegal on bool. New `_PAREN_BOOL_CTOR` disambiguates with a
+  double logical-not: `(bool(` → `(!!bool(`. `!!` is identity on bool
+  (`!!b == b`), cannot begin a cast operand (forces expression context), and
+  emits fine as OpenCL. Runs right after the float `(+float(` rewrite (both
+  must run last — XOR wrapping can synthesise a fresh `(bool(`).
+  - Over-matching the already-legal `if(bool(x))` / call-arg case is harmless
+    (identity) — exactly the float-`+` precedent. The 4 passing `(bool(`
+    shaders (MtsyD4, lllcW4, wtX3DM, 4lyXDc) were re-tested and held.
+
+- **Blast radius (complete, full corpus):** shaders whose normalized output
+  changes = {array: OLD.sub≠NEW.sub} ∪ {contains `(bool(`} = **15 ids**
+  (3dlSzs 4d3yDn 4lyXDc 4sjcz1 MsBczy MtsyD4 XdlcDH XljczK lllcW4 tdjfWc tdsyR2
+  tsSyWG ttfGRB wd2GRh wtX3DM). All 15 re-tested `--force`.
+
+- **Gates (all green, 22.0.368, live header, main tree on fix branch):**
+  - Unit suite **2154 passed + 6 skipped** (baseline 2150 + 4 new tests).
+  - Corpus: ledger direct set-diff on `overall=='PASS'`: **1363 → 1365,
+    FIXED = {4sjcz1, tdjfWc}, REGRESSED = [] (0), NET +2.** `report`
+    regenerated (top cats N=75, B=24, X=15, K=13, G=12, D=12).
+  - `houdini_smoke.py` (wfffRN full-stack cook) exit 0; `rc.py smoke`
+    (gradient/london/digits within perceptual gates) exit 0.
+- **Residual P** (each needs its own root cause or a G/N session, per the
+  triage this session): tsSyWG (weird golf: `mainSound(in int samp,…)` called
+  inside mainImage — edge case); 3d23Dc + wsByWz (`#define` splits a statement
+  mid-expression = category G territory, HIGH/approval); ldfyRn (macro-DSL = N);
+  ldfXzB (`#undef PRIM` cascade); 3t2XzW (error at post-Common line ~290).
+- Branch: `fix/transpiler-p-array-expr-bool-ctor`. Files: `glsl_parser.py`,
+  `tests/unit/test_parser_arrays.py`, `tests/unit/test_parser_paren_primitive_ctor.py`,
+  campaign records + re-tested `ledger.json`/`failures.csv`/`REPORT.md` for the
+  15 ids.
+
+## Session 61 — 2026-07-20 — TRIAGE + PAUSE (no code change; cheap P singles exhausted)
+
+Root-caused the last two un-triaged P singles; **both are macro-expander
+(category N) work, not localized fixes:**
+- **ldfXzB** — `#define BOXPRIMLIST PRIM(orbitBox) PRIM(floorBox) PRIM(backBox1)`
+  (line 303): an OBJECT macro expanding to FUNCTION-macro calls, where `PRIM` is
+  redefined several times via `#undef`/`#define` (lines 489/492/606/611).
+  Correct expansion needs lazy re-scan-at-use-site with the macro table as it
+  stands at each `BOXPRIMLIST` use (lines 493, 612) — real C-preprocessor
+  semantics, beyond the current gated function-macro expander.
+- **3t2XzW** — function-like macro token-pasting: `float macolumns _M(-1.)`
+  (line 273) and `#define mecolumns(a,b,r,n) -macolumns(a,-b,r,n)` produce a
+  `-macolumns` function-name token; the expander would need operator/token-paste
+  handling to keep these separated/valid.
+
+**Full P residual is now entirely approval-gated or edge:** category N
+(ldfXzB, 3t2XzW, ldfyRn macro-DSL; 4djfDR/tlsSDs mainImage-as-macro;
+3tVSRG mainCubemap-as-macro), category G (3d23Dc, wsByWz — `#define` splits a
+statement), and tsSyWG (edge-case golf: `mainSound(in int samp,…)` called
+inside mainImage — skip per scope policy). The N BACKLOG row already records the
+same verdict for N's 75 passes: *"no further cheap AST-level N win; the
+remaining big win needs the macro-expander."*
+
+**Decision: owner PAUSED the campaign at 1365/1499** (asked S61; options were
+gated-P-macro extension / category-N compile-stage / pivot to another top bucket
+/ pause). No transpiler work until the owner picks a direction later. Unit
+baseline unchanged at **2154 passed + 6 skipped**; no code touched this session.

@@ -6,9 +6,48 @@ Because we're all tired of manually setting 200+ parameters.
 """
 
 import json
+import os
 import re
+from pathlib import Path
+
 import hou
 from typing import Dict, Any, Optional, Tuple
+
+
+def _load_live_code_header() -> Optional[str]:
+    """
+    OPT-IN prototype (category AG follow-up): load the repo's
+    houdini/ocl/include/shadertoyInputs.h so the builder can populate the
+    HDA's `code_header` parameter from the repo file at build time, making
+    the header "live" without an HDA regeneration.
+
+    Only used when the environment variable HSHADERTOY_LIVE_HEADER=1 —
+    default behavior is completely unchanged (the HDA's embedded
+    code_header default is used, exactly as before).
+
+    Resolution order:
+      1. $HSHADERTOY_ROOT/houdini/ocl/include/shadertoyInputs.h
+      2. relative to this file (../../../../ocl/include/shadertoyInputs.h)
+
+    Returns the file text, or None if not found (caller falls back to the
+    HDA default silently).
+    """
+    candidates = []
+    root = os.environ.get("HSHADERTOY_ROOT") or hou.getenv("HSHADERTOY_ROOT")
+    if root:
+        candidates.append(
+            Path(root) / "houdini" / "ocl" / "include" / "shadertoyInputs.h")
+    # builder.py = <root>/houdini/scripts/python/hshadertoy/builder/builder.py
+    candidates.append(
+        Path(__file__).resolve().parents[4] / "ocl" / "include"
+        / "shadertoyInputs.h")
+    for path in candidates:
+        try:
+            if path.is_file():
+                return path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return None
 
 
 def _safe_node_name(name: str, fallback: str = "shadertoy") -> str:
@@ -363,6 +402,21 @@ def build_shadertoy_hda(
         )
 
         all_params.update(rp_params)
+
+    # OPT-IN (HSHADERTOY_LIVE_HEADER=1): populate the HDA's code_header parm
+    # from the repo's shadertoyInputs.h so header fixes take effect without an
+    # HDA regeneration. Default off — behavior is identical to before unless
+    # the env var is explicitly set. If the parm is missing on an older HDA,
+    # the existing "Parameter not found" warning path below handles it safely.
+    if os.environ.get("HSHADERTOY_LIVE_HEADER") == "1":
+        live_header = _load_live_code_header()
+        if live_header is not None:
+            all_params["code_header"] = live_header
+            print("Live code_header: populated from shadertoyInputs.h "
+                  "(HSHADERTOY_LIVE_HEADER=1)")
+        else:
+            print("Warning: HSHADERTOY_LIVE_HEADER=1 but shadertoyInputs.h "
+                  "not found; using the HDA's embedded code_header default.")
 
     # Set all parameters on the node
     # This is where the rubber meets the road
