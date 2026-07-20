@@ -3,6 +3,7 @@
     { "HSHADERTOY_ROOT": "" },
     { "HSHADERTOY_HOUDINI": "" },
     { "SHADERTOY_API_KEY": ""},
+    { "HSHADERTOY_LIVE_HEADER": "1"},    
     { "MEDIA_JSON_PATH": "$HSHADERTOY_ROOT/houdini/pic/media.json" },      
     { "PYTHONPATH": { "value": "$HSHADERTOY_HOUDINI/scripts/python", "method": "append" } },
     { "PYTHONPATH": { "value": "$HSHADERTOY_ROOT", "method": "append" } },
