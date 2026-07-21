@@ -25,6 +25,18 @@ main_header → your header → main_kernel → your kernel → closing
 (prepended to the GLSL *before* transpiling — the campaign does this); otherwise
 you get implicit-declaration warnings + ptxas unresolved externs.
 
+> ⚠ **Level 0 proves the CAMPAIGN transpiler, not the Houdini one.**
+> `compilecl.py` compiles output from **Host A** (`tests/transpile.py`). The
+> shipping Houdini path is **Host B**
+> (`houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`), a
+> near-duplicate that has drifted before (S63b — the campaign compiled
+> `mp *= ROT(...)` but Houdini emitted a raw `float2 *= matrix2x2` and crashed
+> the cook). **A green Level 0 does NOT guarantee the shader cooks in
+> Houdini.** Only Level 2 (real cook) runs Host B. When a shader passes the
+> campaign but fails a real cook, suspect Host A/B drift — see the "campaign
+> only exercises Host A" box in the transpiler-dev skill for the must-mirror
+> wrapper checklist.
+
 ### Level 1 — HDA build + transpile, NO cook: `builder_test_headless.py`
 ```bash
 HSHADERTOY_ROOT="C:/dev/hShadertoy" \

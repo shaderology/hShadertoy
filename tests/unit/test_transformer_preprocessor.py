@@ -368,11 +368,13 @@ def test_ivec2_constructor_in_define(transformer):
 
 
 def test_multiple_vector_constructors_in_define(transformer):
-    """Test multiple vector constructors in one macro."""
+    """Test multiple vector constructors in one macro. Single-arg ctors over a
+    macro parameter (which may expand to a vector) route to the overloadable
+    GLSL_<type> dispatcher — category N, Session 54."""
     source = "#define BLEND(a,b,t) mix(vec2(a), vec2(b), t)"
     result = transformer.transform(source)
-    assert "(float2)(a)" in result
-    assert "(float2)(b)" in result
+    assert "GLSL_vec2(a)" in result
+    assert "GLSL_vec2(b)" in result
     assert "GLSL_mix" in result
 
 
@@ -579,10 +581,13 @@ def test_hlsl_alias_ctor_in_define_body(transformer):
 
 
 def test_hlsl_alias_ctor_in_ifdef_block(transformer):
-    """float3(...)/int3(...) inside a conditional block get cast too."""
+    """float3(...)/int3(...) inside a conditional block get handled too. The
+    outer single-arg ctor (whose arg int3(1,2,3) is a vector) routes to the
+    GLSL_vec3 dispatcher; the inner component list stays a cast — category N,
+    Session 54 (`(float3)(int3_expr)` was an invalid conversion before)."""
     source = "#ifdef LIGHT\n    float3 v = float3(int3(1,2,3));\n#endif"
     result = transformer.transform(source)
-    assert "(float3)((int3)(1,2,3))" in result
+    assert "GLSL_vec3((int3)(1,2,3))" in result
 
 
 def test_hlsl_alias_ctor_not_double_wrapped(transformer):

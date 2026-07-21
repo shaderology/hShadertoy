@@ -60,6 +60,17 @@ VECTOR_TYPE_INFO = {
     'bvec2': ('bool', 2), 'bvec3': ('bool', 3), 'bvec4': ('bool', 4),
 }
 
+# GLSL constructor names (vector + scalar) that have an overloadable
+# GLSL_<name> single-argument dispatcher in glslHelpers.h (category N,
+# Session 54). Used as the fallback when the argument type is untypeable.
+_CTOR_DISPATCH_TYPES = {
+    'vec2', 'vec3', 'vec4',
+    'ivec2', 'ivec3', 'ivec4',
+    'uvec2', 'uvec3', 'uvec4',
+    'bvec2', 'bvec3', 'bvec4',
+    'float', 'int', 'uint', 'bool',
+}
+
 # OpenCL vector name -> GLSL name, for TYPE_NAME_MAP lookups on types that
 # came from parameter registration (see VECTOR_TYPE_INFO note above).
 OPENCL_TO_GLSL_NAME = {
@@ -1911,6 +1922,34 @@ class ASTTransformer:
                     function_name, opencl_type, arguments[0], location)
                 if converted is not None:
                     return converted
+
+                # Category N fallback (Session 54): the conversion lowering
+                # bailed. If the single argument's type is genuinely UNKNOWN
+                # (not a known scalar/vector, and not an overloaded-fn
+                # expression whose collapsed width is untrustworthy), the plain
+                # `(int2)(expr)` cast is invalid whenever `expr` turns out to be
+                # a vector (`vec2(textureSize(ch,0))`, `ivec2(chRes.xy)`,
+                # `int(READ(...))`). Route to the overloadable GLSL_<glslType>
+                # dispatcher in glslHelpers.h and let OpenCL overload resolution
+                # supply the type. A KNOWN scalar keeps the plain cast (it
+                # broadcasts correctly and has a smaller blast radius).
+                #
+                # A BARE IDENTIFIER argument is excluded: an untypeable
+                # identifier is almost always an object-like macro, and a
+                # comma-list macro (`#define COLOR_1 .5, .9, .95` —
+                # `vec3(COLOR_1)`) expands the dispatcher call into a 3-arg
+                # call with no overload, while the cast expands into a legal
+                # component list (regressed Xt23z3). Call/member/subscript
+                # expressions cannot swallow a comma list, so they are safe.
+                if (function_name in _CTOR_DISPATCH_TYPES
+                        and not isinstance(arguments[0], IR.Identifier)
+                        and self._vector_ctor_arg_type(arguments[0]) is None
+                        and not self._expr_type_uses_overloaded_fn(arguments[0])):
+                    return IR.CallExpression(
+                        function=f'GLSL_{function_name}',
+                        arguments=[arguments[0]],
+                        source_location=location
+                    )
 
             # Multi-arg vector ctors: GLSL truncates excess components
             # (vec3(vec2, vec4) uses the first 3 of the 2+4), but OpenCL's
@@ -4014,11 +4053,18 @@ class ASTTransformer:
         historical raw-text passthrough left them untyped, so e.g. a matrix
         `*` inside the block never lowered to GLSL_mul). Any parse error or
         unrecognized child falls back to the raw-text passthrough — the worst
-        case per block is the status quo. Program-scope blocks (which wrap
-        whole functions/declarations) keep the raw path.
+        case per block is the status quo.
+
+        Category E residual (Session 63): the same routing now also applies to
+        PROGRAM-SCOPE blocks whose children are whole `function_definition`s —
+        the ubiquitous `#if DFx / #elif DFy` chain that selects one of several
+        definitions of the same helper (mslfR2 "cubes"). Their bodies need the
+        identical lowering (out/inout params, matrix `*=`, vec ctors). Blocks
+        containing an ENTRY-POINT definition (mainImage/…) still fall back to
+        raw text — that flow is owned by transpile.py
+        `_entry_trapped_in_conditional` (S59) and must not change.
         """
-        if (node.type in ('preproc_if', 'preproc_ifdef', 'preproc_ifndef')
-                and not self._global_scope):
+        if node.type in ('preproc_if', 'preproc_ifdef', 'preproc_ifndef'):
             block = self._try_transform_preproc_block(node)
             if block is not None:
                 return block
@@ -4040,6 +4086,12 @@ class ASTTransformer:
         'if_statement', 'for_statement', 'while_statement', 'do_statement',
         'break_statement', 'continue_statement', 'compound_statement',
         'preproc_if', 'preproc_ifdef', 'preproc_ifndef',
+        # Program-scope (S63): a conditional may wrap whole function defs.
+        'function_definition',
+    ))
+    # Entry-point defs inside a conditional keep the raw path (S59 owns them).
+    _PREPROC_ENTRY_POINTS = frozenset((
+        'mainImage', 'mainCubemap', 'mainSound', 'mainVR',
     ))
     # Single directives legal inside a routed block — kept as raw text lines.
     _PREPROC_RAW_CHILDREN = frozenset((
@@ -4100,6 +4152,11 @@ class ASTTransformer:
                 continue
             if ctype not in self._PREPROC_ROUTABLE_STMTS:
                 raise _PreprocRouteAbort(ctype)
+            if (ctype == 'function_definition'
+                    and child.name in self._PREPROC_ENTRY_POINTS):
+                # Entry point trapped in a conditional — leave the WHOLE block
+                # on the raw path so transpile.py's S59 retry owns it.
+                raise _PreprocRouteAbort('entry:' + str(child.name))
             transformed = self._transform_node(child)
             if transformed is not None:
                 stmts.append(transformed)

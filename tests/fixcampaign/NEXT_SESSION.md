@@ -1,109 +1,104 @@
-# NEXT SESSION → Session 62: **CAMPAIGN PAUSED (owner, 2026-07-20)** — awaiting a direction decision
+# NEXT SESSION → Session 64
 
-> **PAUSED at 1365/1499.** Session 61 exhausted the cheap, no-approval P
-> singles: every remaining P and N pass now needs macro-expander (category N) or
-> category-G (`#define`-splits-statement) STRUCTURAL work, which is the owner's
-> approval gate — and the owner chose to pause rather than authorize it (or a
-> pivot) at the end of S61. **Do NOT start category N / G / P-macro work without
-> the owner re-authorizing a direction.** When the owner resumes, the live
-> options (from the S61 ask) are:
-> 1. **Gated P-macro extension** — extend the S24 function-macro expander for the
->    parse-FAILING P shapes (ldfXzB object→function macro + `#undef`/redefine;
->    3t2XzW token-paste; ldfyRn macro-DSL). Gated on parse-failure ⇒ 0-regression
->    on passing shaders by construction. ~3-4 P passes; hard preprocessor
->    semantics but bounded blast radius. *(was the recommended path.)*
-> 2. **Category N compile-stage** — the 75-pass bucket (`ivec2(U)` in `#define`
->    bodies); highest payoff, highest regression risk (expander must run on
->    already-parsing shaders).
-> 3. **Pivot to another top bucket** with possible localized no-approval wins:
->    B=24, X=15, K=13, D=12.
->
-> Once the owner picks, rewrite this file for that session and follow the normal
-> protocol below.
-
-**READ FIRST, in this order, then execute (when un-paused):**
+**READ FIRST, in this order, then execute:**
 1. `tests/fixcampaign/README.md` — workflow & guardrails (TDD, full unit suite
    green, **0 PASS→FAIL regressions**, commit rules, Houdini smoke +
    `python tests/rendercompare/rc.py smoke` render-correctness gate — run BOTH).
 2. this file.
-3. The relevant BACKLOG rows (the `P` table row; `### N`/the `N` table row for
-   the approval item).
+3. The relevant BACKLOG row for whichever category you pick.
 
-## State after Session 61 (2026-07-20) — PAUSED
-- Session 61 was **triage-only, no code change** (see PROGRESS.md S61). The last
-  two un-triaged P singles (ldfXzB, 3t2XzW) were root-caused as category-N
-  macro-expander work. Corpus unchanged: **1365/1499 PASS.** Unit **2154 + 6**.
+## State after Session 63 (2026-07-21) — category E program-scope residual MERGED
+- **E residual — program-scope preproc-block AST routing (fix `625604fe`, merge
+  `f35f3f5b`).** Program-scope `#if DFx / #elif DFy` chains wrapping whole
+  `function_definition`s now route through the AST (out/inout params, matrix
+  `*=`, vec ctors lower correctly); entry-point defs in a conditional stay raw
+  (S59 owns them). Trigger was `tests/shaders/complex/cubes.glsl` (shadertoy
+  mslfR2) — now compiles. **Blast radius 35 PASS shaders, 0 regressed.**
+  Corpus stays **1393/1499** (cubes is a manual test shader, NOT in the corpus,
+  left untracked). Collateral: corpus shader **MdVcRK** improved `[G,K,T]→[G]`
+  (its `out`-param blocker cleared; residual is an independent category-G
+  `invalid token at start of a preprocessor expression`).
+- **Unit baseline: 2196 passed + 6 skipped** (+3 in
+  `test_transformer_preproc_matrix.py` Part 3). All four gates green on merged
+  main. See PROGRESS.md S63 + BACKLOG E "Program-scope residual".
+- Top failing categories now: **B=25, X=16, D=12, K=12, T=10, J=10**
+  (`corpus.py summary` / `report` is live truth; these are snapshots).
 
-## State after Session 60 (2026-07-20)
-- **More P singles (+2, 1363→1365, 0 regressed):** expression-size type-first
-  array decl (tdjfWc `vec3[SZ*3]`) — broadened `_TYPE_FIRST_ARRAY_DECL`'s size
-  group AND pinned it single-line (a multi-line match fused a bracketed comment
-  range with the next line's identifier); `(bool(x) ? …)` cast-ambiguity
-  (4sjcz1) — new `_PAREN_BOOL_CTOR` inserts identity `!!`. Both in
-  `_normalize_array_syntax` (`glsl_parser.py`), same family as S22/S23.
-- Corpus: **1365/1499 PASS.** Top failing: N=75, B=24, X=15, K=13, G=12, D=12.
-- Unit baseline: **2154 passed + 6 skipped.**
+## State after Session 62 (2026-07-21) — UN-PAUSED, +28 merged
+- **Category N + P design competition, both branches merged to main (+28, 0
+  regressed, 1365→1393):**
+  - **N — overloadable ctor dispatcher (+21)** (`glslHelpers.h`
+    `GLSL_{vec,ivec,uvec,bvec}{2,3,4}` + scalar dispatchers; single-arg arity
+    scan in the textual macro/`#if` path + AST untypeable-arg fallback). **N is
+    off the top of the board** — residual is multi-blocker buffer passes only.
+  - **P/G — gated macro-expander extension (+7)** (wrapping-object macros,
+    comment-blanking, multi-line call sites, entry-macro-only gate). Bonus: it
+    retired the two category-G "`#define` splits a statement" shaders (3d23Dc,
+    wsByWz) **without** the approval-gated G redesign.
+- Corpus: **1393/1499 PASS.** Top failing categories now: **B=25, X=16, K=13,
+  D=12, T=11, J=10** (`corpus.py summary` is live truth; these are snapshots).
+- Unit baseline: **2193 passed + 6 skipped.**
 - H22 migration remains fully validated; `HSHADERTOY_LIVE_HEADER=1`,
   `shadertoyInputs.h` LIVE. Treat header edits with campaign-proof discipline.
-- If the owner hasn't committed the H22 changeset yet (HDA, main_header.cl,
-  main_kernel.cl, build_options.json, `*_h21/_h22` archives, ledger.json), it
-  may appear as uncommitted WIP — **do not stage or revert it.**
 
-## PRIORITY 1 — the LAST cheap P parse-error singles (no approval needed)
-`corpus.py list P` is live truth. The remaining sole-blocker P singles are each
-their own root cause and the cheap ones are getting thin — root-cause FRESH from
-`tests/campaign/cache/<id>.json` and check the pattern isn't already handled by
-`_normalize_array_syntax` (`glsl_parser.py`). Triaged in S60:
-- **ldfXzB** (`#undef PRIM` cascade at L615) and **3t2XzW** (error at
-  post-Common line ~290) — NOT yet root-caused; look first, they *may* be
-  localized.
-- **3d23Dc**, **wsByWz** — a `#define` appears mid-expression, splitting a
-  statement across a preprocessor directive → **category G** (preprocessor
-  splits statements; HIGH-risk/redesign — needs owner approval, don't attempt
-  as a "single").
-- **ldfyRn** — macro-DSL (`c(...) C(...) path(style(...))`) → **category N**.
-- **tsSyWG** — golf shader calling `mainSound(in int samp, …)` INSIDE mainImage
-  (a param declaration in call-arg position); genuinely malformed idiom →
-  **edge case, skip** per scope policy.
-If no cheap P single remains after looking at ldfXzB/3t2XzW, go to Priority 2.
+## PRIORITY — pick the next localized win from the top buckets
+No approval-gated redesign is queued. Per scope policy (fix if common+localized;
+skip if edge/rewrite), spawn a read-only investigation agent to cluster the top
+bucket's error logs FIRST, then fix the localized slice. Candidates, in order:
+- **B (25)** — pointer/address-space param model (`__generic T *` fix-it hints,
+  out-param `&`, global-pointer deref). The full B model is a redesign (needs
+  owner approval — see the B BACKLOG rows), but individual localized shapes have
+  flipped before; cluster before committing to scope.
+- **X (16)** — bitcast / `as_int`/`as_float` family + `uintBitsToFloat` cousins;
+  historically transformer-only, localized (`fix/transpiler-x-bitcast`).
+- **K (13)** — array/struct ctor residual (mostly mis-tagged macro-abuse
+  ParseErrors per the K row — verify before chasing).
+- **D (12)**, **T (11)**, **J (10)** — overloadable-user-fn / param-qualifier /
+  macro-body-matmul residuals; each row records what's left.
 
-## PRIORITY 2 (owner approval required) — category N (75 passes, biggest bucket)
-Macro-expander structural work — write the design into the BACKLOG N row and
-ASK before implementing. Stop and ask the owner for this one. Note the P
-residual (4djfDR, tlsSDs mainImage-as-macro; ldfyRn macro-DSL; the `#define`-
-splits-statement pair) largely funnels into the N/G preprocessor work, so an
-N session may retire several P passes too.
-
-## Deferred follow-ups (grab if blocked)
+## Residuals worth grabbing if blocked (from S62)
+- **3t2XzW** (ex-P) now PARSES; residual is category **B** — `pmod`
+  inout-pointer called inside an object-macro body.
+- **ldfyRn** (ex-P) Image parses; Buf A residual is category **X**.
 - **Mty3zh** (ex-Q): AF ctor-overflow `vec2(hashRace(...), gl_FragCoord.xy/
   iResolution.xy)`; precedent = `_truncate_overflow_ctor_args` (S45 family).
-- **rendercompare:** README caveat — wgpu-shadertoy's raw `gl_FragCoord.y` is
-  the FLIP of its own `fragCoord.y` (proven S56; HDA side is faithful) →
-  Q-shader compares vs wgpu mis-verdict. Consider a reference-free
-  self-checking smoke shader (green iff helper gl_FragCoord == entry
-  fragCoord) so `rc.py smoke` guards the geometry assumption end-to-end.
+
+## ⚠ TWO TRANSPILER HOSTS — a fix can pass the campaign yet fail in Houdini (S63b)
+There are **two host wrappers** around the shared core `src/glsl_to_opencl`:
+- **Host A** `tests/transpile.py` — what the campaign, `compilecl.py`, the
+  ledger, and every "proof" exercise. Corpus PASS ≠ Houdini PASS.
+- **Host B** `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`
+  — the **real HDA/Houdini deployment** wrapper. Only a real cook runs it.
+They have **diverged before** (S63b: Host B was missing the `matrix_macros`
+seed, so cubes.glsl compiled in the campaign but a raw `float2 *= matrix2x2`
+crashed the real Houdini cook). **Any fix that lives in a host WRAPPER pass
+(pre/post-processing, not the shared transformer/emitter core) MUST be mirrored
+into BOTH files.** When a shader "passes the campaign but fails in Houdini",
+suspect Host A/B drift first. The only Host-B gates are real cooks:
+`houdini_smoke.py`, `rc.py smoke`, or a per-shader
+`hython builder_cook_headless.py <api.json> Transpile` (env `HSHADERTOY_ROOT`
++ `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`).
 
 ## Houdini / environment notes
-- Gates green unpinned on **22.0.368** through S60, with the live header.
+- Gates green unpinned on **22.0.368** through S62, with the live header.
 - **After any Houdini version/build change: run
-  `python tests/fixcampaign/probe_launch_geometry.py` FIRST** (exit 0
-  required). If it fails, the gid-derived gl_FragCoord accessor is unsafe on
-  that build → fallback is branch `fix/q-fragcoord-threading` @ 78d01832. The
-  H22 setter is the SOLE seeder of `GLSL_glFragCoord_off` (S58); the probe
-  exercises that path.
-- Harness background tasks die at ~2 h — long corpus runs must be
-  chunk-resumable (`full_retest_s57.py <start-offset>` pattern) or owner-run.
+  `python tests/fixcampaign/probe_launch_geometry.py` FIRST** (exit 0 required).
+- Harness background tasks die at ~2 h / 10-min-per-call cap — long corpus runs
+  must be chunk-resumable or owner-run. `campaign.py test --ids` wants a
+  **comma-separated** list (space-separated silently no-ops).
+- Campaign build `-I` is **absolute to `C:\dev\hShadertoy`** — worktree header
+  edits need a local (uncommitted) `tests/build_options.json` repoint, and
+  Houdini gates MUST run in the main tree.
 
 ## Gates & proof recipe (same as always)
-- Unit suite: `python -m pytest tests/unit/ -q` — **baseline 2154 passed + 6
+- Unit suite: `python -m pytest tests/unit/ -q` — **baseline 2193 passed + 6
   skipped.** Add failing repro tests FIRST.
 - Corpus: back up `tests/campaign/ledger.json` to scratch FIRST; re-test
-  changed ids `--force` (≤10-id batches for failing ids); delta = direct
-  Python set-diff on `overall=='PASS'`; **REGRESSED must be 0.**
-- Blast radius: for a pre-parse normalizer change, enumerate the EXACT set of
-  changed ids by diffing OLD.sub vs NEW.sub over the corpus cache (as in S60) —
-  and diff over the currently-PASS shaders specifically to catch comment/false-
-  positive rewrites before they regress anything.
+  changed ids `--force` (≤25-id batches); delta = direct Python set-diff on
+  `overall=='PASS'`; **REGRESSED must be 0.** For a pre-parse/emission change,
+  enumerate the exact changed-id set with the Stage-0 hash rig
+  (`scratchpad .../hash_rig.py` pattern) and re-test all changed currently-PASS
+  ids as the regression proof.
 - Houdini: `houdini_smoke.py` AND `rc.py smoke`, both exit 0, main tree.
 - The owner keeps uncommitted WIP in the tree — never stage files you didn't
   change; stage your files by name.

@@ -20,6 +20,24 @@ two *host scripts* drive it by importing internals:
   — the shipping Houdini path, a drifted near-duplicate of Host A. **A
   package fix is not shipped until Host B has it too** — check both.
 
+> ⚠ **The campaign only exercises Host A.** `compilecl.py`, the ledger, and
+> every corpus number run through `tests/transpile.py`. The ONLY things that
+> run Host B are a real Houdini cook: `houdini_smoke.py`, `rc.py smoke`, or
+> `hython builder_cook_headless.py <api.json> Transpile`. So a shader can be
+> green in the campaign yet crash in Houdini purely from **host drift** — that
+> was S63b (`mp *= ROT(...)` compiled in the campaign, emitted a raw
+> `float2 *= matrix2x2` in Houdini). When "campaign PASS but Houdini FAIL",
+> suspect Host A/B drift FIRST. **Any fix living in a host WRAPPER pass (not
+> the shared `src/` core) must be added to BOTH files and proved with a real
+> cook.** Known must-mirror wrapper responsibilities (audited to parity
+> 2026-07-21): the `matrix_macros` seed
+> (`transformer.user_function_return_types.update(preprocessor.matrix_macros)`),
+> the S59 entry-trapped-in-`#ifdef` rescue (`strip_conditionals` +
+> `_entry_trapped_in_conditional`), `normalize_entry_point`,
+> `post_process_ifdef_blocks`, the AG uniform-redefine push-pop, and the
+> category-A hoisted-global-init prepend. (Common-tab merge is Host-A-only by
+> design — Houdini injects Common as its own renderpass.)
+
 Host A flow per shader pass (single-TU entry-point model since 2026-07-08 —
 `docs/handover/ENTRYPOINT_REDESIGN.md`): Common merged by string-concat →
 `normalize_entry_point()` rewrites unconventional entries (macro-entry

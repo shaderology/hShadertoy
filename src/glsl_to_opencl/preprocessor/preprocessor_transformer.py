@@ -108,6 +108,40 @@ class PreprocessorTransformer:
             'mat4': 'matrix4x4',
         }
 
+        # Category N (Session 54): dispatcher name for a SINGLE-argument
+        # vector constructor whose argument may be a vector (overloadable
+        # GLSL_<type> family in glslHelpers.h — same precedent as GLSL_matN).
+        # The C cast `(int2)(U)` miscompiles when U expands to a float2; the
+        # dispatcher lets OpenCL overload resolution supply the type. HLSL
+        # aliases map to the GLSL-named dispatcher (float2 -> GLSL_vec2).
+        self.vector_ctor_dispatchers = {
+            'vec2': 'GLSL_vec2', 'vec3': 'GLSL_vec3', 'vec4': 'GLSL_vec4',
+            'ivec2': 'GLSL_ivec2', 'ivec3': 'GLSL_ivec3', 'ivec4': 'GLSL_ivec4',
+            'uvec2': 'GLSL_uvec2', 'uvec3': 'GLSL_uvec3', 'uvec4': 'GLSL_uvec4',
+            'bvec2': 'GLSL_bvec2', 'bvec3': 'GLSL_bvec3', 'bvec4': 'GLSL_bvec4',
+            'float2': 'GLSL_vec2', 'float3': 'GLSL_vec3', 'float4': 'GLSL_vec4',
+            'int2': 'GLSL_ivec2', 'int3': 'GLSL_ivec3', 'int4': 'GLSL_ivec4',
+            'uint2': 'GLSL_uvec2', 'uint3': 'GLSL_uvec3', 'uint4': 'GLSL_uvec4',
+        }
+
+        # A ctor argument that is a bare numeric literal is provably a scalar
+        # broadcast — the existing cast is already correct, so it is NOT
+        # routed to the dispatcher (keeps the changed-output blast radius to
+        # constructors whose argument could actually be a vector).
+        self._numeric_literal_re = re.compile(
+            r'^[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)[fFuU]?$'
+        )
+
+        # Object-like macros whose body is a top-level comma list
+        # (`#define COLOR_1 0.50, 0.90, 0.95`). `vec3(COLOR_1)` textually
+        # scans as ONE argument but expands to THREE — routing it to the
+        # dispatcher would produce a 3-arg call with no overload, while the
+        # cast expands into a legal component list. Names recorded here keep
+        # the cast. (Macro PARAMETERS can never receive an unparenthesized
+        # comma list — that is an expansion arity error — so bare parameter
+        # arguments stay routable.)
+        self.comma_object_macros = set()
+
         # Track if we're inside a preprocessor conditional block
         # This helps us know whether to transform code lines
         self.inside_conditional = False
@@ -228,6 +262,11 @@ class PreprocessorTransformer:
         macro_name = match.group(2)
         params = match.group(3) or ''  # Empty string if no params
         body = match.group(4)
+
+        # Record comma-list object macros BEFORE transforming any later body
+        # that might use them as a single ctor argument (category N guard).
+        if not params and self._has_top_level_comma(body):
+            self.comma_object_macros.add(macro_name)
 
         # Transform the macro body
         transformed_body = self._transform_macro_body(body)
@@ -476,6 +515,54 @@ class PreprocessorTransformer:
         # This ensures code inside #ifdef blocks gets properly transformed
         return self._transform_macro_body(line)
 
+    def _scan_ctor_args(self, text: str, open_idx: int):
+        """
+        Balanced-paren scan of a constructor argument list (category N).
+
+        Args:
+            text: The full body text.
+            open_idx: Index of the constructor's opening '('.
+
+        Returns:
+            (arity, arg_text) where arity is the number of TOP-LEVEL
+            arguments and arg_text the raw text between the outer parens.
+            Returns (None, None) when the list is unscannable — unbalanced
+            within the body (e.g. a macro splits the parens) — so the caller
+            keeps today's cast behavior for it.
+        """
+        depth = 0
+        arity = 1
+        has_content = False
+        for i in range(open_idx, len(text)):
+            c = text[i]
+            if c == '(':
+                depth += 1
+            elif c == ')':
+                depth -= 1
+                if depth == 0:
+                    if not has_content:
+                        arity = 0
+                    return arity, text[open_idx + 1:i]
+            elif depth == 1:
+                if c == ',':
+                    arity += 1
+                elif not c.isspace():
+                    has_content = True
+        return None, None
+
+    @staticmethod
+    def _has_top_level_comma(text: str) -> bool:
+        """True if text contains a comma outside any parens/brackets."""
+        depth = 0
+        for c in text:
+            if c in '([':
+                depth += 1
+            elif c in ')]':
+                depth -= 1
+            elif c == ',' and depth <= 0:
+                return True
+        return False
+
     def _transform_macro_body(self, body: str) -> str:
         """
         Transform a macro body by applying GLSL transformations.
@@ -495,26 +582,42 @@ class PreprocessorTransformer:
         if not body or not body.strip():
             return body
 
-        # Step 1: Transform vector constructors to cast syntax
-        # vec2(...) -> (float2)(...)
+        # Step 1: Transform vector constructors.
+        # Component lists / scalar-literal broadcasts keep the legal cast
+        # syntax vec2(a, b) -> (float2)(a, b); a SINGLE argument that could be
+        # a vector routes to the overloadable dispatcher vec2(U) ->
+        # GLSL_vec2(U) (category N — the cast `(int2)(U)` is invalid when U
+        # expands to a float2, and only the OpenCL compiler knows U's type).
         # This must be done BEFORE function call transformation to avoid conflicts
         for glsl_type, opencl_type in sorted(self.vector_types.items(), key=lambda x: len(x[0]), reverse=True):
             # Pattern: vec2 followed by (
             # Use word boundary to avoid partial matches (e.g., vec2d)
             # Negative lookbehind: not preceded by GLSL_ (avoid double-transforming)
-            pattern = r'(?<!GLSL_)\b' + re.escape(glsl_type) + r'\s*\('
+            pattern = re.compile(r'(?<!GLSL_)\b' + re.escape(glsl_type) + r'\s*\(')
+            dispatcher = self.vector_ctor_dispatchers[glsl_type]
 
-            def replace_constructor(match):
-                """Replace vector constructor with cast syntax."""
-                # Get the matched text
-                matched = match.group(0)
-                # Extract any whitespace between type and (
-                ws_match = re.search(r'\s+', matched)
-                ws = ws_match.group(0) if ws_match else ''
-                # Return cast-style syntax: (float2)(
-                return f'({opencl_type})('
-
-            body = re.sub(pattern, replace_constructor, body)
+            pieces = []
+            pos = 0
+            while True:
+                match = pattern.search(body, pos)
+                if match is None:
+                    break
+                open_idx = match.end() - 1  # index of the '('
+                arity, arg_text = self._scan_ctor_args(body, open_idx)
+                if (arity == 1
+                        and not self._numeric_literal_re.match(arg_text.strip())
+                        and arg_text.strip() not in self.comma_object_macros):
+                    replacement = f'{dispatcher}('
+                else:
+                    # 2+ args (legal OpenCL vector literal), a provably-scalar
+                    # literal broadcast, an empty list, or an unscannable
+                    # (unbalanced) argument list: keep today's cast behavior.
+                    replacement = f'({opencl_type})('
+                pieces.append(body[pos:match.start()])
+                pieces.append(replacement)
+                pos = match.end()  # continue after the '(' — nested ctors still seen
+            pieces.append(body[pos:])
+            body = ''.join(pieces)
 
         # Step 1a: Transform matrix constructors to the overloadable GLSL_matN
         # dispatcher — mat2(c,s,-s,c) -> GLSL_mat2(c,s,-s,c),

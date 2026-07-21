@@ -893,7 +893,7 @@
           "O"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1785:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid)",
+        "error_excerpt": "<kernel>:1835:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid)",
         "artifact": "artifacts/ls2GWc/Image"
       }
     ],
@@ -1219,17 +1219,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 615, col 19): Syntax error at line 615, column 19",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ldfXzB/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "MdXSzX": {
     "id": "MdXSzX",
@@ -1553,7 +1551,7 @@
           "X"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1639:28: error: must use 'struct' tag to refer to type 'Box' | <kernel>:1647:29: error: must use 'struct' tag to refer to type 'Disk' | <kernel>:1648:5: error: must use 'struct' tag to refer to type 'Box' | <kernel>:1648:9: error: initializing 'struct Box' with an expression of incompatible type 'int'",
+        "error_excerpt": "<kernel>:1713:28: error: must use 'struct' tag to refer to type 'Box' | <kernel>:1721:29: error: must use 'struct' tag to refer to type 'Disk' | <kernel>:1722:5: error: must use 'struct' tag to refer to type 'Box' | <kernel>:1722:9: error: initializing 'struct Box' with an expression of incompatible type 'int'",
         "artifact": "artifacts/4sSXWt/Image"
       }
     ],
@@ -4329,7 +4327,7 @@
           "X"
         ],
         "difficulty": "low",
-        "error_excerpt": "<kernel>:2776:37: error: no matching function for call to 'fract' | <kernel>:2808:37: error: no matching function for call to 'fract'",
+        "error_excerpt": "<kernel>:2875:37: error: no matching function for call to 'fract' | <kernel>:2907:37: error: no matching function for call to 'fract'",
         "artifact": "artifacts/MlsSzf/Image"
       }
     ],
@@ -8598,7 +8596,7 @@
           "N"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1804:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1805:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1806:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1820:45: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
+        "error_excerpt": "<kernel>:1903:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1904:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1905:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1919:45: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
         "artifact": "artifacts/MstXzN/Buf_A"
       }
     ],
@@ -9592,7 +9590,7 @@
           "UNKNOWN"
         ],
         "difficulty": "unknown",
-        "error_excerpt": "<kernel>:1592:50: error: expected ')'",
+        "error_excerpt": "<kernel>:1666:50: error: expected ')'",
         "artifact": "artifacts/XdtXDX/Image"
       }
     ],
@@ -10458,7 +10456,7 @@
           "H"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1548:39: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1548:43: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1548:48: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1555:45: error: invalid operands to binary expression ('matrix2x2' and 'float')",
+        "error_excerpt": "<kernel>:1647:40: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1647:44: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1647:49: error: invalid operands to binary expression ('matrix2x2' and 'float') | <kernel>:1654:46: error: invalid operands to binary expression ('matrix2x2' and 'float')",
         "artifact": "artifacts/lsKSDm/Image"
       }
     ],
@@ -10649,28 +10647,24 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1749:25: error: invalid conversion between vector type 'float4' (vector of 4 'float' values) and integer type 'int' of different size",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XdVSRc/Image"
       },
       {
         "pass": "buffer",
         "name": "Buf A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1797:21: error: invalid conversion between vector type 'float4' (vector of 4 'float' values) and integer type 'int' of different size",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XdVSRc/Buf_A"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "ldySzt": {
     "id": "ldySzt",
@@ -11052,7 +11046,7 @@
           "D"
         ],
         "difficulty": "low",
-        "error_excerpt": "<kernel>:1569:8: error: redefinition of 'GLSL_pow'",
+        "error_excerpt": "<kernel>:1668:8: error: redefinition of 'GLSL_pow'",
         "artifact": "artifacts/4l33Rn/Image"
       }
     ],
@@ -11466,7 +11460,7 @@
           "D"
         ],
         "difficulty": "low",
-        "error_excerpt": "<kernel>:1680:7: error: redefinition of 'GLSL_tanh' | <kernel>:1689:8: error: redefinition of 'GLSL_pow'",
+        "error_excerpt": "<kernel>:1779:7: error: redefinition of 'GLSL_tanh' | <kernel>:1788:8: error: redefinition of 'GLSL_pow'",
         "artifact": "artifacts/Ml33W8/Image"
       }
     ],
@@ -13182,7 +13176,7 @@
           "D"
         ],
         "difficulty": "low",
-        "error_excerpt": "<kernel>:1587:8: error: redefinition of 'GLSL_pow'",
+        "error_excerpt": "<kernel>:1686:8: error: redefinition of 'GLSL_pow'",
         "artifact": "artifacts/lly3Dm/Image"
       }
     ],
@@ -16415,17 +16409,17 @@
       {
         "pass": "buffer",
         "name": "Buf A",
-        "transpile": "FAIL",
-        "compile": null,
+        "transpile": "OK",
+        "compile": "FAIL",
         "categories": [
-          "P"
+          "X"
         ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 103, col 5): Syntax error at line 103, column 5",
+        "difficulty": "low",
+        "error_excerpt": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE | Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x2025aa94870>: | (): Warning: Function generickernel is a kernel, so overriding noinline attribute. The function may be inlined when called. | ptxas fatal   : Unresolved extern function '_Z4drawfDv4_f'",
         "artifact": "artifacts/ldfyRn/Buf_A"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "COMPILE_FAIL"
   },
   "MsscRn": {
     "id": "MsscRn",
@@ -17961,7 +17955,7 @@
           "K"
         ],
         "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 1, col 1): Syntax error at line 1, column 1",
+        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 26, col 1): Syntax error at line 26, column 1",
         "artifact": "artifacts/XsBczV/Buffer_A"
       }
     ],
@@ -18559,7 +18553,7 @@
           "AG"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1677:100: error: expression is not assignable | <kernel>:1677:206: error: expression is not assignable | <kernel>:1677:265: error: expression is not assignable | <kernel>:1677:320: error: expression is not assignable",
+        "error_excerpt": "<kernel>:1725:100: error: expression is not assignable | <kernel>:1725:206: error: expression is not assignable | <kernel>:1725:265: error: expression is not assignable | <kernel>:1725:320: error: expression is not assignable",
         "artifact": "artifacts/4dsfRn/Buffer_A"
       }
     ],
@@ -20278,17 +20272,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Could not find mainImage() function in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4djfDR/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "lsjBWz": {
     "id": "lsjBWz",
@@ -20686,7 +20678,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1897:55: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1947:55: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/ld2BWW/Buf_A"
       },
       {
@@ -20698,7 +20690,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1895:55: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1945:55: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
         "artifact": "artifacts/ld2BWW/Buf_B"
       },
       {
@@ -20778,7 +20770,7 @@
           "T"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:13: error: unknown type name 'in' | <kernel>:1781:23: error: expected ')' | <kernel>:1783:33: error: use of undeclared identifier 'uv_code' | <kernel>:1793:11: error: unknown type name 'in'",
+        "error_excerpt": "<kernel>:1855:13: error: unknown type name 'in' | <kernel>:1855:23: error: expected ')' | <kernel>:1857:33: error: use of undeclared identifier 'uv_code' | <kernel>:1867:11: error: unknown type name 'in'",
         "artifact": "artifacts/ldjBRy/Buf_D"
       },
       {
@@ -20790,7 +20782,7 @@
           "T"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1604:13: error: unknown type name 'in' | <kernel>:1604:23: error: expected ')' | <kernel>:1606:33: error: use of undeclared identifier 'uv_code' | <kernel>:1616:11: error: unknown type name 'in'",
+        "error_excerpt": "<kernel>:1678:13: error: unknown type name 'in' | <kernel>:1678:23: error: expected ')' | <kernel>:1680:33: error: use of undeclared identifier 'uv_code' | <kernel>:1690:11: error: unknown type name 'in'",
         "artifact": "artifacts/ldjBRy/Buf_C"
       },
       {
@@ -21067,7 +21059,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:3224:9: error: member reference base type 'uint [8]' is not a structure or union | <kernel>:3224:21: error: passing '__generic PrintState' to parameter of incompatible type '__generic PrintState *'; remove * | <kernel>:3281:17: error: member reference base type 'uint [11]' is not a structure or union | <kernel>:3281:29: error: passing 'PrintState' to parameter of incompatible type '__generic PrintState *'; take the address with &",
+        "error_excerpt": "<kernel>:3323:9: error: member reference base type 'uint [8]' is not a structure or union | <kernel>:3323:21: error: passing '__generic PrintState' to parameter of incompatible type '__generic PrintState *'; remove * | <kernel>:3380:17: error: member reference base type 'uint [11]' is not a structure or union | <kernel>:3380:29: error: passing 'PrintState' to parameter of incompatible type '__generic PrintState *'; take the address with &",
         "artifact": "artifacts/Md2fzV/Buf_A"
       },
       {
@@ -21378,7 +21370,7 @@
           "V"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1676:28: error: unexpected type name 'float2': expected expression | <kernel>:1676:28: error: unexpected type name 'float2': expected expression | <kernel>:1676:28: error: expected expression | <kernel>:1676:28: error: expected expression",
+        "error_excerpt": "<kernel>:1751:28: error: unexpected type name 'float2': expected expression | <kernel>:1751:28: error: unexpected type name 'float2': expected expression | <kernel>:1751:28: error: expected expression | <kernel>:1751:28: error: expected expression",
         "artifact": "artifacts/MdSfWc/Image"
       },
       {
@@ -21664,7 +21656,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:2047:5: error: passing '__generic float *' to parameter of incompatible type 'float' | <kernel>:2047:5: error: invalid operands to binary expression ('float' and '__generic float *') | <kernel>:2047:5: error: assigning to '__generic float *' from incompatible type 'float' | <kernel>:2047:5: error: assigning to '__generic SurfaceHitInfo *' from incompatible type 'SurfaceHitInfo'",
+        "error_excerpt": "<kernel>:2121:5: error: passing '__generic float *' to parameter of incompatible type 'float' | <kernel>:2121:5: error: invalid operands to binary expression ('float' and '__generic float *') | <kernel>:2121:5: error: assigning to '__generic float *' from incompatible type 'float' | <kernel>:2121:5: error: assigning to '__generic SurfaceHitInfo *' from incompatible type 'SurfaceHitInfo'",
         "artifact": "artifacts/4tGGzd/Image"
       }
     ],
@@ -22192,7 +22184,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1593:16: error: 'overloadable' attribute only applies to functions | <kernel>:1594:8: error: member reference base type '__generic float3 *' is not a structure or union | <kernel>:1594:8: error: member reference base type '__generic float3 *' is not a structure or union | <kernel>:1594:32: error: member reference base type '__generic float3 *' is not a structure or union",
+        "error_excerpt": "<kernel>:1692:16: error: 'overloadable' attribute only applies to functions | <kernel>:1693:8: error: member reference base type '__generic float3 *' is not a structure or union | <kernel>:1693:8: error: member reference base type '__generic float3 *' is not a structure or union | <kernel>:1693:32: error: member reference base type '__generic float3 *' is not a structure or union",
         "artifact": "artifacts/XtfcRX/Image"
       }
     ],
@@ -22220,17 +22212,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "G"
-        ],
-        "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 1, col 1): Syntax error in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4tXcRl/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "4llcRl": {
     "id": "4llcRl",
@@ -22833,7 +22823,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1954:23: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:1968:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:1969:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:1970:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer",
+        "error_excerpt": "<kernel>:2053:23: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:2067:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:2068:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer | <kernel>:2069:51: error: passing '__global float3 *' to parameter of type 'float3 *' changes address space of pointer",
         "artifact": "artifacts/4lSyRm/Image"
       }
     ],
@@ -23280,12 +23270,10 @@
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1675:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1783:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XljczK/Buffer_A"
       },
       {
@@ -23299,7 +23287,7 @@
         "artifact": "artifacts/XljczK/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "4lSyzK": {
     "id": "4lSyzK",
@@ -23328,12 +23316,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1671:16: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4lSyzK/Image"
       },
       {
@@ -23347,7 +23333,7 @@
         "artifact": "artifacts/4lSyzK/Buffer_A"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "MtScz3": {
     "id": "MtScz3",
@@ -24505,12 +24491,10 @@
         "pass": "buffer",
         "name": "Buf A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1595:42: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1600:36: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1605:39: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1627:67: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/XtlfRl/Buf_A"
       },
       {
@@ -24524,7 +24508,7 @@
         "artifact": "artifacts/XtlfRl/Buf_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "4tffDS": {
     "id": "4tffDS",
@@ -24943,7 +24927,7 @@
           "T"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1643:5: error: invalid token at start of a preprocessor expression | <kernel>:1646:12: error: no matching function for call to 'GLSL_mat3' | <kernel>:1654:5: error: invalid token at start of a preprocessor expression | <kernel>:1657:28: error: no matching function for call to 'GLSL_mat3'",
+        "error_excerpt": "<kernel>:1717:5: error: invalid token at start of a preprocessor expression | <kernel>:1720:12: error: no matching function for call to 'GLSL_mat3' | <kernel>:1728:5: error: invalid token at start of a preprocessor expression | <kernel>:1731:28: error: no matching function for call to 'GLSL_mat3'",
         "artifact": "artifacts/XlXfDs/Buffer_A"
       }
     ],
@@ -25520,16 +25504,14 @@
         "pass": "buffer",
         "name": "Buf A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1659:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/MtSBWw/Buf_A"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "MljfWw": {
     "id": "MljfWw",
@@ -26226,12 +26208,10 @@
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1736:12: error: invalid conversion between ext-vector type 'float4' (vector of 4 'float' values) and 'uint4' (vector of 4 'unsigned int' values) | <kernel>:1840:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4d3yDn/Buffer_A"
       },
       {
@@ -26245,7 +26225,7 @@
         "artifact": "artifacts/4d3yDn/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "XdcyW8": {
     "id": "XdcyW8",
@@ -27408,12 +27388,10 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "G",
-          "K",
-          "T"
+          "G"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1731:5: error: invalid token at start of a preprocessor expression | <kernel>:1779:24: error: unknown type name 'out' | <kernel>:1779:28: error: expected ')' | <kernel>:1779:28: error: parameter name omitted",
+        "error_excerpt": "<kernel>:1802:5: error: invalid token at start of a preprocessor expression | <kernel>:1975:5: error: invalid token at start of a preprocessor expression | <kernel>:1984:5: error: invalid token at start of a preprocessor expression | <kernel>:2187:5: error: use of undeclared identifier 'K2'",
         "artifact": "artifacts/MdVcRK/Image"
       },
       {
@@ -27425,7 +27403,7 @@
           "G"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1672:9: error: invalid token at start of a preprocessor expression",
+        "error_excerpt": "<kernel>:1722:9: error: invalid token at start of a preprocessor expression",
         "artifact": "artifacts/MdVcRK/Buffer_A"
       }
     ],
@@ -28520,16 +28498,14 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1773:5: error: invalid conversion between ext-vector type 'int3' (vector of 3 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1773:5: error: invalid conversion between ext-vector type 'int3' (vector of 3 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1787:28: error: invalid conversion between ext-vector type 'int3' (vector of 3 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1789:28: error: invalid conversion between ext-vector type 'int3' (vector of 3 'int' values) and 'float3' (vector of 3 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ls3fzj/Image"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "ls3cDr": {
     "id": "ls3cDr",
@@ -28573,7 +28549,7 @@
           "F"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1702:44: error: subscripted value is not an array, pointer, or vector",
+        "error_excerpt": "<kernel>:1776:44: error: subscripted value is not an array, pointer, or vector",
         "artifact": "artifacts/ls3cDr/Buffer_A"
       }
     ],
@@ -28912,7 +28888,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:2185:5: error: member reference base type 'uint [11]' is not a structure or union | <kernel>:2185:17: error: passing 'PrintState' to parameter of incompatible type '__generic PrintState *'; take the address with &",
+        "error_excerpt": "<kernel>:2284:5: error: member reference base type 'uint [11]' is not a structure or union | <kernel>:2284:17: error: passing 'PrintState' to parameter of incompatible type '__generic PrintState *'; take the address with &",
         "artifact": "artifacts/ldKcz3/Image"
       }
     ],
@@ -29025,12 +29001,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1850:47: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1851:49: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/MsGfz1/Image"
       },
       {
@@ -29074,7 +29048,7 @@
         "artifact": "artifacts/MsGfz1/Buf_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "MdGfzD": {
     "id": "MdGfzD",
@@ -31129,12 +31103,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1728:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4ltczj/Image"
       },
       {
@@ -31146,19 +31118,17 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1823:26: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
+        "error_excerpt": "<kernel>:1922:26: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
         "artifact": "artifacts/4ltczj/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1737:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1737:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4ltczj/Buffer_C"
       },
       {
@@ -31170,7 +31140,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1823:26: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
+        "error_excerpt": "<kernel>:1922:26: error: initializing 'float' with an expression of incompatible type 'int2' (vector of 2 'int' values)",
         "artifact": "artifacts/4ltczj/Buffer_A"
       },
       {
@@ -32069,12 +32039,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1732:17: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/4lccDj/Image"
       },
       {
@@ -32098,7 +32066,7 @@
         "artifact": "artifacts/4lccDj/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "MlGyRc": {
     "id": "MlGyRc",
@@ -32186,17 +32154,17 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
+        "transpile": "OK",
+        "compile": "FAIL",
         "categories": [
-          "G"
+          "UNKNOWN"
         ],
-        "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 326, col 54): Syntax error at line 326, column 54",
+        "difficulty": "unknown",
+        "error_excerpt": "<kernel>:5289:31: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type 'matrix3x3' | <kernel>:5347:41: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type 'matrix3x3' | <kernel>:5366:80: error: passing 'matrix3x3' to parameter of incompatible type 'float' | <kernel>:5367:79: error: passing 'matrix3x3' to parameter of incompatible type 'float'",
         "artifact": "artifacts/MlKcRt/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "COMPILE_FAIL"
   },
   "XtycRK": {
     "id": "XtycRK",
@@ -32390,17 +32358,17 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
+        "transpile": "OK",
+        "compile": "FAIL",
         "categories": [
-          "G"
+          "UNKNOWN"
         ],
-        "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 1401, col 8): Syntax error at line 1401, column 8",
+        "difficulty": "unknown",
+        "error_excerpt": "<kernel>:5313:31: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type 'matrix3x3' | <kernel>:5371:41: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type 'matrix3x3' | <kernel>:5390:80: error: passing 'matrix3x3' to parameter of incompatible type 'float' | <kernel>:5391:79: error: passing 'matrix3x3' to parameter of incompatible type 'float'",
         "artifact": "artifacts/4tycWd/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "COMPILE_FAIL"
   },
   "ltVcWt": {
     "id": "ltVcWt",
@@ -35004,12 +34972,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1674:49: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1674:71: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3ds3RB/Image"
       },
       {
@@ -35018,15 +34984,13 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "AB",
           "AD",
           "J",
           "L",
-          "N",
           "V"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1690:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1693:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1697:25: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1697:84: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1775:20: error: unexpected type name 'mat2': expected expression | <kernel>:1775:20: error: unexpected type name 'float4': expected expression | <kernel>:1775:20: error: expected parameter declarator | <kernel>:1775:20: error: expected ')'",
         "artifact": "artifacts/3ds3RB/Buffer_A"
       }
     ],
@@ -35519,12 +35483,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1682:20: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1684:37: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/WdBGRz/Image"
       },
       {
@@ -35538,7 +35500,7 @@
         "artifact": "artifacts/WdBGRz/Buffer_A"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "Wd2GzR": {
     "id": "Wd2GzR",
@@ -35639,12 +35601,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1724:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wd2GRh/Image"
       },
       {
@@ -35661,16 +35621,14 @@
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1726:18: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wd2GRh/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "ws23RW": {
     "id": "ws23RW",
@@ -35777,40 +35735,34 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1647:23: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tsjGRm/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1654:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1668:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1670:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tsjGRm/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1649:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1655:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1660:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1665:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tsjGRm/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "Wdj3WR": {
     "id": "Wdj3WR",
@@ -36462,17 +36414,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 32, col 1): Syntax error at line 32, column 1",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3d23Dc/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "Wdj3W3": {
     "id": "Wdj3W3",
@@ -40063,12 +40013,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "AJ"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:5103:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5104:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5105:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5106:71: error: invalid operands to binary expression ('int' and 'float')",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttfGRB/Image"
       },
       {
@@ -40077,48 +40025,40 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "AD",
-          "AJ",
           "J"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:5119:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5120:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5121:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5122:71: error: invalid operands to binary expression ('int' and 'float')",
+        "error_excerpt": "<kernel>:4024:47: error: unexpected type name 'float4': expected expression | <kernel>:4028:47: error: unexpected type name 'float4': expected expression | <kernel>:4032:47: error: unexpected type name 'float4': expected expression",
         "artifact": "artifacts/ttfGRB/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "AJ"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:5246:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5247:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5248:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5249:71: error: invalid operands to binary expression ('int' and 'float')",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttfGRB/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "AJ"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:6339:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6340:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6341:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:6342:71: error: invalid operands to binary expression ('int' and 'float')",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttfGRB/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "AJ"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:5236:51: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5237:54: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5238:68: error: invalid operands to binary expression ('int' and 'float') | <kernel>:5239:71: error: invalid operands to binary expression ('int' and 'float')",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttfGRB/Buffer_D"
       }
     ],
@@ -40750,7 +40690,7 @@
           "H"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:3168:22: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3188:19: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3195:21: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3201:19: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3')",
+        "error_excerpt": "<kernel>:3242:22: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3262:19: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3269:21: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3') | <kernel>:3275:19: error: invalid operands to binary expression ('matrix3x3' and 'matrix3x3')",
         "artifact": "artifacts/Wl23WV/Image"
       }
     ],
@@ -41988,17 +41928,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Could not find mainImage() function in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tlsSDs/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "WlSSzz": {
     "id": "WlSSzz",
@@ -42122,17 +42060,17 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
+        "transpile": "OK",
+        "compile": "FAIL",
         "categories": [
-          "P"
+          "B"
         ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 916, col 8): Syntax error at line 916, column 8",
+        "difficulty": "high",
+        "error_excerpt": "<kernel>:5590:5: error: initializing 'float' with an expression of incompatible type '__generic float *' | <kernel>:5590:5: error: passing 'float2' (vector of 2 'float' values) to parameter of incompatible type '__generic float2 *'; take the address with & | <kernel>:5592:5: error: no matching function for call to 'pmod' | <kernel>:5603:5: error: initializing 'float' with an expression of incompatible type '__generic float *'",
         "artifact": "artifacts/3t2XzW/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "COMPILE_FAIL"
   },
   "3lBSRm": {
     "id": "3lBSRm",
@@ -43902,16 +43840,14 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1615:21: error: invalid conversion between ext-vector type 'uint3' (vector of 3 'unsigned int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1615:21: error: invalid conversion between ext-vector type 'uint3' (vector of 3 'unsigned int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1615:21: error: invalid conversion between ext-vector type 'uint3' (vector of 3 'unsigned int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1615:21: error: invalid conversion between ext-vector type 'uint3' (vector of 3 'unsigned int' values) and 'float3' (vector",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/WdyGWR/Image"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "tdy3DR": {
     "id": "tdy3DR",
@@ -46868,40 +46804,34 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1686:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcGzH/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1694:26: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1695:26: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcGzH/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1689:26: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1690:26: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcGzH/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "3tc3zN": {
     "id": "3tc3zN",
@@ -47485,7 +47415,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1733:5: error: passing 'float' to parameter of incompatible type '__generic float *'; take the address with & | <kernel>:1749:9: error: passing 'float' to parameter of incompatible type '__generic float *'; take the address with & | <kernel>:1770:5: error: passing 'SFHit' to parameter of incompatible type '__generic SFHit *'; take the address with & | <kernel>:1788:9: error: passing 'SFHit' to parameter of incompatible type '__generic SFHit *'; take the address with &",
+        "error_excerpt": "<kernel>:1807:5: error: passing 'float' to parameter of incompatible type '__generic float *'; take the address with & | <kernel>:1823:9: error: passing 'float' to parameter of incompatible type '__generic float *'; take the address with & | <kernel>:1844:5: error: passing 'SFHit' to parameter of incompatible type '__generic SFHit *'; take the address with & | <kernel>:1862:9: error: passing 'SFHit' to parameter of incompatible type '__generic SFHit *'; take the address with &",
         "artifact": "artifacts/3dGXDt/Image"
       }
     ],
@@ -47885,7 +47815,7 @@
           "UNKNOWN"
         ],
         "difficulty": "unknown",
-        "error_excerpt": "<kernel>:1760:27: error: unexpected type name 'Object': expected expression | <kernel>:1795:24: error: unexpected type name 'Object': expected expression | <kernel>:1804:24: error: unexpected type name 'Object': expected expression | <kernel>:1825:16: error: unexpected type name 'Object': expected expression",
+        "error_excerpt": "<kernel>:1834:27: error: unexpected type name 'Object': expected expression | <kernel>:1869:24: error: unexpected type name 'Object': expected expression | <kernel>:1878:24: error: unexpected type name 'Object': expected expression | <kernel>:1899:16: error: unexpected type name 'Object': expected expression",
         "artifact": "artifacts/3ld3WX/Buffer_A"
       },
       {
@@ -47954,64 +47884,54 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1633:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1638:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1643:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3l3GDs/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1633:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1638:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1643:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3l3GDs/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1633:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1638:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1643:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3l3GDs/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1633:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1638:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1643:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3l3GDs/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1633:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1638:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1643:12: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3l3GDs/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "wl33Ds": {
     "id": "wl33Ds",
@@ -48598,40 +48518,34 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1656:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:35: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:58: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:81: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tK3Dm/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1656:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:35: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:58: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:81: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tK3Dm/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1656:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:35: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:58: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:81: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tK3Dm/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "wlKGWm": {
     "id": "wlKGWm",
@@ -49088,36 +49002,30 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1757:23: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1757:23: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1757:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtyGWc/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1754:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1754:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1761:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1761:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtyGWc/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1760:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1760:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1766:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1766:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtyGWc/Buffer_B"
       },
       {
@@ -49126,11 +49034,10 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "N",
           "V"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1763:34: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1763:34: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values) | <kernel>:1763:46: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1763:46: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float3' (vector of 3 'float' values)",
+        "error_excerpt": "<kernel>:1818:36: error: expected expression | <kernel>:1819:36: error: expected expression | <kernel>:1820:36: error: expected expression | <kernel>:1821:36: error: expected expression",
         "artifact": "artifacts/wtyGWc/Buffer_C"
       },
       {
@@ -49139,11 +49046,10 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "N",
           "V"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1757:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1760:13: error: expected expression | <kernel>:1763:13: error: expected expression | <kernel>:1774:34: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1810:13: error: expected expression | <kernel>:1813:13: error: expected expression",
         "artifact": "artifacts/wtyGWc/Buffer_D"
       }
     ],
@@ -49818,64 +49724,54 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1699:17: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1699:28: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1699:49: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1699:63: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tltSW8/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1699:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tltSW8/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1584:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1585:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1718:9: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1719:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tltSW8/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1584:17: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1584:32: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1584:47: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1584:62: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tltSW8/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1704:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/tltSW8/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "WtcSW4": {
     "id": "WtcSW4",
@@ -49945,7 +49841,7 @@
           "N"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1694:24: error: invalid conversion between vector type 'float2' (vector of 2 'float' values) and integer type 'int' of different size | <kernel>:1695:24: error: invalid conversion between vector type 'float2' (vector of 2 'float' values) and integer type 'int' of different size",
+        "error_excerpt": "<kernel>:1744:24: error: invalid conversion between vector type 'float2' (vector of 2 'float' values) and integer type 'int' of different size",
         "artifact": "artifacts/Wl3SDM/Image"
       },
       {
@@ -50026,11 +49922,10 @@
         "transpile": "OK",
         "compile": "FAIL",
         "categories": [
-          "N",
           "V"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1641:12: error: expected expression | <kernel>:1663:15: error: expected expression | <kernel>:1676:19: error: expected expression | <kernel>:1931:12: error: invalid conversion between ext-vector type 'float3' (vector of 3 'float' values) and 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1715:12: error: expected expression | <kernel>:1737:15: error: expected expression | <kernel>:1750:19: error: expected expression",
         "artifact": "artifacts/WlcXRS/Image"
       },
       {
@@ -50794,17 +50689,15 @@
       {
         "pass": "buffer",
         "name": "Buffer A",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "G"
-        ],
-        "difficulty": "high",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 1, col 1): Syntax error in GLSL source",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttGSWR/Buffer_A"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "WlKSD1": {
     "id": "WlKSD1",
@@ -50934,7 +50827,7 @@
           "E"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1862:8: error: cannot convert between vector and non-scalar values ('float2' (vector of 2 'float' values) and 'matrix2x2') | <kernel>:2683:19: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type '__generic float3 *'; take the address with &",
+        "error_excerpt": "<kernel>:1936:8: error: cannot convert between vector and non-scalar values ('float2' (vector of 2 'float' values) and 'matrix2x2') | <kernel>:2757:19: error: passing 'float3' (vector of 3 'float' values) to parameter of incompatible type '__generic float3 *'; take the address with &",
         "artifact": "artifacts/3lVSWw/Image"
       }
     ],
@@ -51007,12 +50900,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1738:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1870:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1876:21: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tVSRG/Image"
       },
       {
@@ -51031,12 +50922,10 @@
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1738:18: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values) | <kernel>:1838:13: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tVSRG/Buffer_A"
       }
     ],
@@ -51519,64 +51408,54 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1646:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1653:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1685:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtVXDc/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1646:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1653:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1685:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtVXDc/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1646:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1653:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1683:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtVXDc/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1646:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1653:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1683:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtVXDc/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1646:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1653:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1656:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1683:12: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wtVXDc/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "ttyXDd": {
     "id": "ttyXDd",
@@ -51783,7 +51662,7 @@
           "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1680:14: error: no matching function for call to 'as_int' | <kernel>:1689:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer",
+        "error_excerpt": "<kernel>:1754:14: error: no matching function for call to 'as_int' | <kernel>:1763:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer",
         "artifact": "artifacts/3sXyz4/Image"
       },
       {
@@ -51793,11 +51672,10 @@
         "compile": "FAIL",
         "categories": [
           "AK",
-          "B",
-          "N"
+          "B"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1680:14: error: no matching function for call to 'as_int' | <kernel>:1689:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer | <kernel>:1877:13: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "error_excerpt": "<kernel>:1754:14: error: no matching function for call to 'as_int' | <kernel>:1763:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer",
         "artifact": "artifacts/3sXyz4/Buffer_A"
       },
       {
@@ -51811,7 +51689,7 @@
           "W"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1680:14: error: no matching function for call to 'as_int' | <kernel>:1689:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer | <kernel>:1758:13: error: no matching function for call to 'GLSL_max'",
+        "error_excerpt": "<kernel>:1754:14: error: no matching function for call to 'as_int' | <kernel>:1763:10: error: passing '__global int *' to parameter of type 'int *' changes address space of pointer | <kernel>:1832:13: error: no matching function for call to 'GLSL_max'",
         "artifact": "artifacts/3sXyz4/Buffer_B"
       }
     ],
@@ -52710,64 +52588,54 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcSD8/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcSD8/Buffer_A"
       },
       {
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcSD8/Buffer_B"
       },
       {
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcSD8/Buffer_C"
       },
       {
         "pass": "buffer",
         "name": "Buffer D",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1781:14: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/ttcSD8/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "WsjyRz": {
     "id": "WsjyRz",
@@ -52836,12 +52704,10 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1851:17: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/WsSczh/Image"
       },
       {
@@ -52858,16 +52724,14 @@
         "pass": "buffer",
         "name": "Buffer B",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1957:19: error: invalid conversion between ext-vector type 'float2' (vector of 2 'float' values) and 'int2' (vector of 2 'int' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/WsSczh/Buffer_B"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "3djyz1": {
     "id": "3djyz1",
@@ -53101,17 +52965,15 @@
       {
         "pass": "image",
         "name": "Image",
-        "transpile": "FAIL",
-        "compile": null,
-        "categories": [
-          "P"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "TranspileError: Failed to parse GLSL: ParseError(line 24, col 1): Syntax error at line 24, column 1",
+        "transpile": "OK",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/wsByWz/Image"
       }
     ],
-    "overall": "TRANSPILE_FAIL"
+    "overall": "PASS"
   },
   "tdScD1": {
     "id": "tdScD1",
@@ -53819,7 +53681,7 @@
           "AK"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:2029:15: error: passing '__global LIGHT *' to parameter of type 'LIGHT *' changes address space of pointer",
+        "error_excerpt": "<kernel>:2103:15: error: passing '__global LIGHT *' to parameter of type 'LIGHT *' changes address space of pointer",
         "artifact": "artifacts/tsjyDG/Image"
       },
       {
@@ -53832,7 +53694,7 @@
           "J"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1574:7: error: unexpected type name 'float2': expected expression | <kernel>:1574:22: error: unexpected type name 'float4': expected expression | <kernel>:1575:7: error: unexpected type name 'float2': expected expression | <kernel>:1575:22: error: unexpected type name 'float4': expected expression",
+        "error_excerpt": "<kernel>:1648:7: error: unexpected type name 'float2': expected expression | <kernel>:1648:22: error: unexpected type name 'float4': expected expression | <kernel>:1649:7: error: unexpected type name 'float2': expected expression | <kernel>:1649:22: error: unexpected type name 'float4': expected expression",
         "artifact": "artifacts/tsjyDG/Buffer_A"
       }
     ],
@@ -54840,7 +54702,7 @@
           "UNKNOWN"
         ],
         "difficulty": "unknown",
-        "error_excerpt": "<kernel>:1684:10: error: variable length arrays are not supported in OpenCL",
+        "error_excerpt": "<kernel>:1734:10: error: variable length arrays are not supported in OpenCL",
         "artifact": "artifacts/WdfBDj/Buffer_A"
       },
       {
@@ -55142,7 +55004,7 @@
           "AJ"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1743:101: error: array subscript is not an integer",
+        "error_excerpt": "<kernel>:1817:101: error: array subscript is not an integer",
         "artifact": "artifacts/ws2fzz/Image"
       },
       {
@@ -55154,7 +55016,7 @@
           "UNKNOWN"
         ],
         "difficulty": "unknown",
-        "error_excerpt": "<kernel>:1741:10: error: variable length arrays are not supported in OpenCL",
+        "error_excerpt": "<kernel>:1791:10: error: variable length arrays are not supported in OpenCL",
         "artifact": "artifacts/ws2fzz/Buffer_A"
       },
       {
@@ -55354,10 +55216,10 @@
         "compile": "FAIL",
         "categories": [
           "B",
-          "N"
+          "O"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1813:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1813:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1814:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1814:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1887:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1887:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1888:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1888:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
         "artifact": "artifacts/WdjBzW/Image"
       },
       {
@@ -55367,10 +55229,10 @@
         "compile": "FAIL",
         "categories": [
           "B",
-          "N"
+          "O"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1813:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1813:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1814:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1814:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1887:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1887:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1888:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1888:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
         "artifact": "artifacts/WdjBzW/Buffer_A"
       },
       {
@@ -55380,10 +55242,10 @@
         "compile": "FAIL",
         "categories": [
           "B",
-          "N"
+          "O"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1813:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1813:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1814:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1814:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1887:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1887:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1888:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1888:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
         "artifact": "artifacts/WdjBzW/Buffer_B"
       },
       {
@@ -55393,10 +55255,10 @@
         "compile": "FAIL",
         "categories": [
           "B",
-          "N"
+          "O"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1813:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1813:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1814:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1814:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1887:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1887:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1888:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1888:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
         "artifact": "artifacts/WdjBzW/Buffer_C"
       },
       {
@@ -55406,10 +55268,10 @@
         "compile": "FAIL",
         "categories": [
           "B",
-          "N"
+          "O"
         ],
         "difficulty": "high",
-        "error_excerpt": "<kernel>:1813:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1813:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1814:5: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1814:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
+        "error_excerpt": "<kernel>:1887:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1887:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values) | <kernel>:1888:5: error: statement requires expression of scalar type ('int __attribute__((ext_vector_type(2)))' (vector of 2 'int' values) invalid) | <kernel>:1888:5: error: assigning to '__generic float4 *' from incompatible type 'float4' (vector of 4 'float' values)",
         "artifact": "artifacts/WdjBzW/Buffer_D"
       }
     ],
@@ -55943,11 +55805,10 @@
         "compile": "FAIL",
         "categories": [
           "J",
-          "N",
           "X"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1695:45: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1697:17: error: unexpected type name 'mat2': expected expression",
+        "error_excerpt": "<kernel>:1747:17: error: unexpected type name 'mat2': expected expression",
         "artifact": "artifacts/wdSfWh/Image"
       }
     ],
@@ -56371,7 +56232,7 @@
           "F"
         ],
         "difficulty": "med",
-        "error_excerpt": "<kernel>:1678:30: error: subscripted value is not an array, pointer, or vector",
+        "error_excerpt": "<kernel>:1752:30: error: subscripted value is not an array, pointer, or vector",
         "artifact": "artifacts/tlfyzN/Image"
       }
     ],
@@ -56520,24 +56381,20 @@
         "pass": "image",
         "name": "Image",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1680:30: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tscWr/Image"
       },
       {
         "pass": "buffer",
         "name": "Buffer A",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1681:16: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1681:43: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1681:70: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values) | <kernel>:1681:97: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tscWr/Buffer_A"
       },
       {
@@ -56554,12 +56411,10 @@
         "pass": "buffer",
         "name": "Buffer C",
         "transpile": "OK",
-        "compile": "FAIL",
-        "categories": [
-          "N"
-        ],
-        "difficulty": "med",
-        "error_excerpt": "<kernel>:1684:24: error: invalid conversion between ext-vector type 'int2' (vector of 2 'int' values) and 'float2' (vector of 2 'float' values)",
+        "compile": "OK",
+        "categories": [],
+        "difficulty": "",
+        "error_excerpt": "",
         "artifact": "artifacts/3tscWr/Buffer_C"
       },
       {
@@ -56573,7 +56428,7 @@
         "artifact": "artifacts/3tscWr/Buffer_D"
       }
     ],
-    "overall": "COMPILE_FAIL"
+    "overall": "PASS"
   },
   "3tfyWH": {
     "id": "3tfyWH",
@@ -58487,7 +58342,7 @@
           "X"
         ],
         "difficulty": "low",
-        "error_excerpt": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE | Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x19ee1584380>: | <kernel>:1609:12: warning: implicit declaration of function 'inversesqrt' is invalid in OpenCL | return rsqrt(Pow2(GLSL_dFdx(v)) + Pow2(GLSL_dFdy(v)));",
+        "error_excerpt": "clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE - clBuildProgram failed: BUILD_PROGRAM_FAILURE | Build on <pyopencl.Device 'NVIDIA GeForce RTX 2070' on 'NVIDIA CUDA' at 0x1bfa10fe080>: | <kernel>:1683:12: warning: implicit declaration of function 'inversesqrt' is invalid in OpenCL | return rsqrt(Pow2(GLSL_dFdx(v)) + Pow2(GLSL_dFdy(v)));",
         "artifact": "artifacts/3tjyWy/Image"
       }
     ],

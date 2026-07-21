@@ -15,10 +15,21 @@ definition there). The one exception is an entry macro (`mainImage` etc.), which
 has no call site in the user code (Shadertoy's harness calls it) — its `#define`
 is REPLACED by a synthesized real function.
 
-Object-like macros are left entirely untouched here (the existing
-`PreprocessorTransformer` body pass and OpenCL handle them).
+Object-like macros are left for OpenCL EXCEPT the one shape that breaks the
+parse: an object macro whose body wraps function-macro calls
+(`#define BOXPRIMLIST PRIM(a) PRIM(b)`, where `PRIM` is a function macro
+redefined via `#undef`/re-`#define`). Those are expanded at their use site with
+the macro table live at that point, so the wrapped calls become ordinary code.
+Plain object macros (`#define PI 3.14`) are still untouched.
 
-Design & scope: `tests/fixcampaign/CLUSTER5_MACRO_DESIGN.md`.
+Comments are blanked (kept as whitespace) before the walk so a `#define` inside
+a `/* */` block is not registered, and code lines are expanded as contiguous
+chunks so a macro CALL whose arguments span several physical lines (no `\`
+continuation) is handled. All three extensions run only on the parse-failure
+path (see `maybe_expand_function_macros`), so a shader that already parses is
+returned byte-identical.
+
+Design & scope: `tests/fixcampaign/CLUSTER5_MACRO_DESIGN.md` (+ Session 62).
 """
 
 import re
@@ -26,6 +37,11 @@ import re
 _IDENT = re.compile(r'[A-Za-z_]\w*')
 # a function-like #define anywhere (name immediately followed by `(`)
 _HAS_FUNC_MACRO = re.compile(r'#\s*define\s+[A-Za-z_]\w*\(')
+# an object-like macro BODY that looks like it wraps function-macro calls: it
+# contains at least one `IDENT(` (a candidate call site). Object macros whose
+# body has no call shape (`#define PI 3.14159`) are never registered here, so
+# they stay for OpenCL exactly as the original design intends.
+_CALL_SHAPE = re.compile(r'[A-Za-z_]\w*\s*\(')
 # function-like #define: NAME immediately followed by `(` (a space before `(`
 # makes it object-like in C, so no `\s*` between name and paren).
 _DEFINE_FUNC = re.compile(r'^(\s*#\s*define\s+)([A-Za-z_]\w*)\(([^)]*)\)(.*)$')
@@ -75,11 +91,33 @@ def _source_parses(source):
     return not tree.root_node.has_error
 
 
+_DEFINE_ENTRY = re.compile(r'#\s*define\s+(mainImage|mainCubemap|mainVR|mainSound)\(')
+
+
+def _entry_macro_without_real_entry(source):
+    """True when an entry point is defined ONLY as a function-like macro — i.e.
+    a `#define mainImage(...)` exists but no real definition of that entry name
+    outside comments (tlsSDs/4djfDR). Such a source may PARSE (a lone spliced
+    `#define` is a valid directive) yet can never transpile: the entry
+    partition requires a real function. Firing the expander on it therefore
+    cannot regress a passing shader."""
+    blanked = _blank_comments(source)
+    for m in _DEFINE_ENTRY.finditer(blanked):
+        name = m.group(1)
+        ret = 'vec2' if name == 'mainSound' else 'void'
+        if not re.search(r'\b' + ret + r'\s+' + name + r'\s*\(', blanked):
+            return True
+    return False
+
+
 def maybe_expand_function_macros(source):
-    """Expand function-like macros ONLY when the source has one AND does not
-    already parse. Otherwise return it unchanged (zero blast radius on shaders
-    that currently work)."""
-    if _HAS_FUNC_MACRO.search(source) and not _source_parses(source):
+    """Expand function-like macros ONLY when the source has one AND either does
+    not parse or defines its entry point solely as a macro (which can never
+    transpile as-is). Otherwise return it unchanged (zero blast radius on
+    shaders that currently work)."""
+    if _HAS_FUNC_MACRO.search(source) and (
+            not _source_parses(source)
+            or _entry_macro_without_real_entry(source)):
         return expand_function_macros(source)
     return source
 
@@ -97,6 +135,53 @@ def _strip_body_comment(body):
     if idx != -1:
         body = body[:idx]
     return body.rstrip()
+
+
+def _blank_comments(source):
+    """Replace `//` and `/* */` comments with spaces, preserving every newline.
+
+    The expander registers `#define`/`#undef` by scanning raw text; a directive
+    *inside* a block comment (`/* ... #define foo(a,b) ... */`) must NOT be
+    registered, or a same-named real function definition gets mangled as a macro
+    call (corpus shader 3t2XzW). It also lets a multi-line macro CALL that has a
+    `//` comment mid-argument survive (the comment would otherwise swallow the
+    rest of the joined line). GLSL has no string literals, so `//` and `/*` are
+    unambiguous comment starts. Newlines are kept so line numbers stay stable.
+    """
+    out = []
+    i, n = 0, len(source)
+    state = 0  # 0 = code, 1 = // line comment, 2 = /* */ block comment
+    while i < n:
+        c = source[i]
+        two = source[i:i + 2]
+        if state == 0:
+            if two == '//':
+                out.append('  '); i += 2; state = 1; continue
+            if two == '/*':
+                out.append('  '); i += 2; state = 2; continue
+            out.append(c); i += 1
+        elif state == 1:
+            if c == '\n':
+                out.append('\n'); i += 1; state = 0
+            else:
+                out.append(' '); i += 1
+        else:  # state == 2
+            if two == '*/':
+                out.append('  '); i += 2; state = 0; continue
+            out.append('\n' if c == '\n' else ' '); i += 1
+    return ''.join(out)
+
+
+def _body_calls_func_macro(body, macros):
+    """True if `body` contains a call `NAME(` where NAME is a currently-defined
+    function-like macro. Used to gate object-macro expansion to the
+    object-wraps-function-macro pattern (ldfXzB) — a plain object macro whose
+    body only calls real functions is left untouched for OpenCL."""
+    for m in re.finditer(r'([A-Za-z_]\w*)\s*\(', body):
+        entry = macros.get(m.group(1))
+        if entry is not None and entry[0] is not None:
+            return True
+    return False
 
 
 def _to_logical_lines(source):
@@ -177,22 +262,35 @@ def _expand_text(text, macros, hideset=frozenset(), depth=0):
             continue
         name = m.group(0)
         j = m.end()
-        if name in macros and name not in hideset:
-            k = j
-            while k < n and text[k] in ' \t':
-                k += 1
-            if k < n and text[k] == '(':
-                args, end = _parse_args(text, k)
-                params, body = macros[name]
-                if args is not None and len(args) == len(params):
-                    # pad with spaces so an expansion abutting a neighbouring
-                    # operator never fuses into a multi-char token — e.g. `1.-`
-                    # followed by an expansion starting with `-` must stay
-                    # `1.- -x`, not become the decrement `1.--x`.
-                    out.append(' ' + _substitute(body, params, args, macros,
-                                                  hideset | {name}, depth) + ' ')
-                    i = end
+        entry = macros.get(name)
+        if entry is not None and name not in hideset:
+            params, body = entry
+            if params is None:
+                # object-like macro that wraps function-macro calls: expand it
+                # inline ONLY while its body currently calls a function-like
+                # macro (so it becomes ordinary code). The `#undef`/redefine
+                # walk means this is evaluated with the macro table live at THIS
+                # use site (corpus shader ldfXzB). Padding keeps tokens apart.
+                if _body_calls_func_macro(body, macros):
+                    out.append(' ' + _expand_text(body, macros,
+                                                  hideset | {name}, depth + 1) + ' ')
+                    i = j
                     continue
+            else:
+                k = j
+                while k < n and text[k] in ' \t':
+                    k += 1
+                if k < n and text[k] == '(':
+                    args, end = _parse_args(text, k)
+                    if args is not None and len(args) == len(params):
+                        # pad with spaces so an expansion abutting a neighbouring
+                        # operator never fuses into a multi-char token — e.g. `1.-`
+                        # followed by an expansion starting with `-` must stay
+                        # `1.- -x`, not become the decrement `1.--x`.
+                        out.append(' ' + _substitute(body, params, args, macros,
+                                                      hideset | {name}, depth) + ' ')
+                        i = end
+                        continue
         out.append(text[i:j])
         i = j
     return ''.join(out)
@@ -230,14 +328,26 @@ def expand_function_macros(source):
     overwritten by one from an inactive branch, but a macro seen only in
     inactive branches is still registered so those branches stay parseable.
     """
-    macros = {}          # name -> (params, body) used for expansion
+    source = _blank_comments(source)
+
+    macros = {}          # name -> (params, body); params is None for object-like
     active_defined = set()  # names registered from an active branch (locked)
     defined = set()      # object+function macro names for #ifdef evaluation
     cond = []            # stack of per-branch active flags (self_active, decidable, taken)
     out = []
+    code_buf = []        # (text, span) of contiguous non-directive lines
+    last = {'ch': None}  # last non-whitespace char emitted from code (for mid-stmt test)
 
     def cur_active():
         return all(f[0] for f in cond)
+
+    def mid_statement():
+        """True when a directive would land in the middle of a statement — the
+        preceding code did not end at a `;`/`{`/`}` boundary. Only then must a
+        consumed function-macro `#define`/`#undef` be dropped (tree-sitter can't
+        parse a directive mid-expression, shader ldfXzB); everywhere else the
+        directive is kept so the scalar-ctor-in-`#define` pass can still see it."""
+        return last['ch'] is not None and last['ch'] not in ';{}'
 
     def register(name, value):
         act = cur_active()
@@ -247,8 +357,35 @@ def expand_function_macros(source):
         elif name not in active_defined:
             macros[name] = value
 
+    def flush_code():
+        """Expand the buffered run of code lines as ONE joined chunk so a macro
+        CALL whose argument list spans several physical lines (no backslash
+        continuation — corpus shader ldfyRn) is parsed across the newlines.
+        Re-pad with blank lines to keep the region's physical line count (and
+        downstream ParseError line numbers) stable."""
+        if not code_buf:
+            return
+        joined = '\n'.join(t for t, _ in code_buf)
+        target = sum(s for _, s in code_buf)
+        expanded = _expand_text(joined, macros)
+        out.append(expanded)
+        actual = expanded.count('\n') + 1
+        if target > actual:
+            out.extend([''] * (target - actual))
+        stripped = expanded.rstrip()
+        if stripped:
+            last['ch'] = stripped[-1]
+        code_buf.clear()
+
     for text, span in _to_logical_lines(source):
         pad = [''] * (span - 1)
+
+        if not text.lstrip().startswith('#'):
+            code_buf.append((text, span))
+            continue
+
+        # a directive ends the current code run — expand it first, in order
+        flush_code()
 
         # --- conditional directives: update branch-active state ------------
         m = _IFDEF.match(text)
@@ -292,13 +429,25 @@ def expand_function_macros(source):
                 register(name, (params, body))
                 if cur_active():
                     defined.add(name)
-                out.append(text)
+                # Keep the directive so the scalar-ctor-in-`#define` pass sees it
+                # (OpenCL re-expands it); only DROP it when it lands
+                # mid-expression, where every use is already expanded inline and
+                # a kept `#define` would be an unparseable directive between the
+                # sub-expressions of one statement (shader ldfXzB).
+                out.append('' if mid_statement() else text)
                 out.extend(pad)
             continue
-        am = _DEFINE_ANY.match(text)  # object-like #define: track name only
+        am = _DEFINE_ANY.match(text)  # object-like #define
         if am:
+            name = am.group(1)
+            # register for expansion ONLY when the body wraps function-macro
+            # calls (`#define LIST PRIM(a) PRIM(b)`); a plain object macro
+            # (`#define PI 3.14`) is not registered and stays for OpenCL.
+            body = _strip_body_comment(text[am.end():].strip())
+            if _CALL_SHAPE.search(body):
+                register(name, (None, body))
             if cur_active():
-                defined.add(am.group(1))
+                defined.add(name)
             out.append(text)
             out.extend(pad)
             continue
@@ -308,13 +457,12 @@ def expand_function_macros(source):
                 macros.pop(um.group(1), None)
                 active_defined.discard(um.group(1))
                 defined.discard(um.group(1))
-            out.append(text)
+            # Same mid-expression rule as the #define: drop only when it would
+            # sit between the sub-expressions of a statement (shader ldfXzB).
+            out.append('' if mid_statement() else text)
             out.extend(pad)
             continue
-        if text.lstrip().startswith('#'):
-            out.append(text)  # other directive: pass through unevaluated
-            out.extend(pad)
-            continue
-        out.append(_expand_text(text, macros))
+        out.append(text)  # other directive: pass through unevaluated
         out.extend(pad)
+    flush_code()
     return '\n'.join(out)

@@ -3282,3 +3282,233 @@ remaining big win needs the macro-expander."*
 gated-P-macro extension / category-N compile-stage / pivot to another top bucket
 / pause). No transpiler work until the owner picks a direction later. Unit
 baseline unchanged at **2154 passed + 6 skipped**; no code touched this session.
+
+## Session 62 — 2026-07-21 — UN-PAUSED: N + P design competition (+28, 0 regressed, 1365→1393)
+
+Owner un-paused with an explicit multi-branch experiment mandate (delegate
+implementation to Opus subagents, prove each on its own branch, **merge only on
+approval**). A read-only investigation agent clustered category N first; two
+branches were built, proven, and — after owner approval — **both merged to main**.
+
+**Category N — overloadable ctor dispatcher (+21).** Branch
+`fix/transpiler-n-ctor-dispatcher` (bb842d6c), merged 2e658d81. Investigation
+reframed N: it is not a `#if`-block problem but a **single-arg vector/scalar
+constructor whose argument the transpiler cannot statically type**, emitted as
+the invalid OpenCL C-cast `(int2)(float2-expr)`. The AST already lowers typed
+ctors (`convert_intN`/`.xyz`/broadcast); the failures arrive through two doors
+producing the identical bad cast — (1) macro/`#if` TEXTUAL regions
+(`_transform_macro_body`), (2) the AST fallback when `_vector_ctor_arg_type`
+returns None (`vec2(textureSize(...))`, `ivec2(iChannelResolution[i].xy)`). Fix
+= overloadable single-arg dispatchers `GLSL_{vec,ivec,uvec,bvec}{2,3,4}` +
+scalar `GLSL_{float,int,uint,bool}(vecN)` in `glslHelpers.h` (GLSL_mul/GLSL_matN
+precedent — the OpenCL compiler's overload resolution supplies the type info we
+can't). Textual path: balanced-paren arity scan routes **single-arg** ctors to
+the dispatcher, keeps multi-arg component lists as native literal casts
+(`_transform_macro_body`, shared by `_transform_code_line` so macro bodies AND
+`#if` lines are covered in one site). AST path: `_transform_type_constructor`
+emits the dispatcher when `_transform_vector_conversion_ctor` returns None for a
+non-scalar single arg. **Blast radius rig (Stage-0 transpile hash, whole cache):
+0-regress proven by re-testing all changed currently-PASS ids.** Unit +27
+(`test_transformer_ctor_dispatcher.py`, `test_preprocessor_ctor_dispatcher.py`).
+FIXED 21: 3l3GDs 3tK3Dm 3tscWr 4d3yDn 4lSyzK 4lccDj MsGfz1 MtSBWw WdBGRz WdyGWR
+WsSczh XdVSRc XljczK XtlfRl ls3fzj tltSW8 tsjGRm ttcGzH ttcSD8 wd2GRh wtVXDc.
+
+**Category P/G — gated macro-expander extension (+7).** Branch
+`fix/transpiler-p-macro-gated` (783b95d0), merged 33c342b4. Extended the S24
+function-macro expander (`macro_expander.py`), still **gated on parse-failure**
+(passing shaders byte-identical ⇒ 0-regress by construction). Four additions:
+(1) **wrapping-object-macro expansion** — an object macro whose body contains
+function-macro calls expands at each use site with the macro table live there,
+resolving the `#undef PRIM`/re-`#define` cascade (ldfXzB); (2) **comment-blanking
+before the walk** — a `/* */`-commented `#define` was being registered and
+mangling the real function (3t2XzW; **the S61 "token-paste" triage was a mis-read
+of commented-out code**); (3) **multi-line call-site expansion** — contiguous
+code lines expanded as one chunk so a `path( M(..) l(..) … )` call spanning ~100
+un-continued physical lines parses (ldfyRn); (4) **mid-statement directive drop
++ entry-macro gate** — also fire when an entry point is defined ONLY as a macro
+(such a source can never transpile ⇒ 0-regress; the S38 `\`-splice pass runs
+first, after which the lone `#define mainImage(...)` parses). FIXED 7: ldfXzB
+tlsSDs 4djfDR (targets) + **3d23Dc wsByWz** (the two category-G "`#define` splits
+a statement" shaders — previously believed to need the approval-gated G
+redesign) + 4tXcRl ttGSWR (bonus). Unit +12 (`test_macro_expander.py`).
+Residual: 3t2XzW → category B (`pmod` inout-pointer in an object-macro body),
+ldfyRn Buf A → category X — both now PARSE, residuals are genuine downstream
+compile bugs (progress TRANSPILE_FAIL→COMPILE_FAIL, not regressions).
+
+**Rejected without building — Branch B (un-gated/selective macro expansion for
+already-parsing shaders):** the investigation was its evaluation. It flips only
+a subset of the dispatcher's wins while removing the parse-failure gate that is
+the sole 0-regression guarantee for all 1365 passing shaders — dominated on both
+coverage and risk. Not implemented.
+
+**Merge + combined proof.** Sources disjoint (N: `preprocessor_transformer.py`
++ `ast_transformer.py` + `glslHelpers.h`; P: `macro_expander.py`), so both
+merged `--no-ff` (generated-file conflicts resolved `-X theirs` then
+regenerated). Combined blast radius computed identically at pristine
+`6f6a302a` vs merged `33c342b4` = **199 shaders**; all 199 re-tested `--force`.
+Delta vs the 1365 baseline: **NET +28, REGRESSED 0** (= 21 + 7 exactly ⇒ the two
+fixes do not interact). All four gates green on merged main: **unit 2193 passed
++ 6 skipped**, corpus **1393/1499**, `houdini_smoke` exit 0, `rc.py smoke` exit
+0 ("gradient, london, digits within perceptual gates"). Top failing categories
+now B=25, X=16, K=13, D=12, T=11, J=10 — **category N is off the top of the
+board.**
+
+**Traps (re)discovered.** (1) `campaign.py test --ids` takes a
+**comma-separated** list — space-separated ids silently no-op through argparse;
+always verify ledger entries actually changed. (2) A raw-source blast-radius rig
+on `maybe_expand_function_macros` alone is wrong — `maybe_preprocess_directives`
+(the `\`-splice/`#if` pass) runs FIRST and changes what the gate sees; hash the
+full Stage-0 sequence. (3) Re-verify prior-session triage claims against the
+actual parse error before designing (S61's 3t2XzW call was wrong). (4) The
+campaign build's `-I` include path is **absolute to `C:\dev\hShadertoy`** — a
+worktree's edited `glslHelpers.h` is invisible unless `tests/build_options.json`
+is locally repointed (kept uncommitted); Houdini gates therefore MUST run in the
+main tree. (5) Fresh worktrees lack untracked `tests/fixtures/` subdirs, failing
+`test_dummy.py` — recreate the three empty dirs.
+
+
+---
+
+## Session 63 — 2026-07-21 — Category E residual: PROGRAM-SCOPE preproc-block AST routing
+
+**MERGED to main** (fix `625604fe`, merge `f35f3f5b`, `--no-ff`; branch
+`fix/transpiler-e-program-scope-preproc` cut from the then-current main tip
+`f355e407` ⇒ no merge interaction, blast-radius proof applies directly).
+Trigger: owner asked why `tests/shaders/complex/cubes.glsl` (shadertoy mslfR2
+"More cubes") fails to compile in Houdini.
+
+**Root cause (definitive).** S53 built AST routing for statement-level
+`#if`/`#ifdef` blocks (`_try_transform_preproc_block` → `IR.PreprocessorBlock`)
+but **deliberately deferred program-scope blocks** ("Program-scope blocks keep
+the raw path"). cubes.glsl is exactly that deferred case: a program-scope
+`#if defined(DF0) / #elif defined(DF1) / … / #elif defined(DF2) / …` chain that
+selects one of 8 definitions of the same helper `dfeffect(vec3 p, out float
+ogd)`. Because the whole chain took the raw-text passthrough, the AST-level
+transforms **never ran inside it** — so the active `DF2` branch emitted, raw:
+`out float ogd` (not lowered to `float* ogd`), `p1 *= (g_rot)` (not
+`GLSL_mul_vec3_mat3`), and `torus(p1, 10.0*float2(...))` (bare ctor). The
+textual passes (min→GLSL_min etc.) DID run, which is why the block looked
+partly-transpiled. Confirmed with a 2-file A/B repro: the identical `dfeffect`
+OUTSIDE any `#if` transpiles perfectly; inside a program-scope `#if` it does
+not. NB the top-level `mp *= ROT(...)` / `grd.xy *= ROT(...)` errors in the
+owner's original log were **already fixed** by a prior session (emit
+`GLSL_mul_vec2_mat2`) — the only live blocker was the preproc-wrapped block.
+
+**Category = E** (matrix-mul-in-preprocessor-territory), specifically the
+program-scope-wraps-function-definitions residual S53 punted on. Secondary
+flavours cleared as a consequence: **T** (out/inout param) and **J** (matrix
+`*=`).
+
+**Fix (3 edits, `transformer/ast_transformer.py`).** (1) `_transform_preprocessor`
+— drop the `and not self._global_scope` gate so program-scope `#if` blocks also
+attempt routing (all the S53 fail-safes still apply: `has_error` → raw,
+unknown child → `_PreprocRouteAbort` → raw). (2) add `function_definition` to
+`_PREPROC_ROUTABLE_STMTS`. (3) in `_collect_preproc_segments`, if a routed
+`function_definition` is an ENTRY POINT (`mainImage/mainCubemap/mainSound/
+mainVR`, new `_PREPROC_ENTRY_POINTS`), abort the whole block back to raw — that
+flow is owned by transpile.py `_entry_trapped_in_conditional` (S59) and must not
+change. The out-param CALL SITE resolves for free: `function_signatures` is
+populated in source order by `_transform_function_definition`, and the routed
+`dfeffect` defs precede their caller `df()`, so `dfeffect(p, gd1)` correctly
+becomes `dfeffect(p, &gd1)`.
+
+**Proof.** cubes.glsl now **compiles clean** (`compilecl.py` → "Kernel compiled
+successfully!"). Unit suite **2196 passed + 6 skipped** (2193 baseline + 3 new
+tests in `test_transformer_preproc_matrix.py` Part 3). Blast radius via the
+Stage-0 hash rig (main vs branch, all 1393 PASS shaders): **35 currently-PASS
+shaders change output**; all 35 re-tested `--force` through the campaign compile
+path → **all 35 still PASS, REGRESSED 0**. `corpus.py delta`: net +0 this
+session (cubes is not in the corpus), REGRESSED 0. Collateral: **MdVcRK**
+(multi-blocker) dropped categories `[G,K,T]→[G]` — the fix cleared its `unknown
+type name 'out'` blocker; it still fails on an independent category-G
+`invalid token at start of a preprocessor expression` (improvement, masked, not
+a flip). Houdini gates green: `houdini_smoke.py` exit 0 (COOK SUCCESS),
+`rc.py smoke` exit 0 (gradient/london/digits within perceptual gates).
+
+**Traps.** (1) The S59 "tree-sitter keeps a program-scope conditional as one
+opaque raw node" note is about `#ifdef` around `mainImage` for the PARTITION
+step — a `#if/#elif` chain wrapping ordinary helper defs DOES parse into
+structured `function_definition` children (verified by dumping the tree), so it
+is routable. (2) The entry-point guard is essential: without it, routing
+mainImage-in-conditional into an `IR.PreprocessorBlock` would risk the S59
+retry path (wssBz2/lljGDm). (3) cubes.glsl is a manual test shader in
+`tests/shaders/complex/`, NOT in the campaign corpus — left untracked
+(owner-owned input).
+
+**Files:** `src/glsl_to_opencl/transformer/ast_transformer.py`,
+`tests/unit/test_transformer_preproc_matrix.py` (+3), + regenerated
+ledger/REPORT/failures/artifacts (MdVcRK re-test + 35 held-PASS re-tests).
+Commit `625604fe`, merged `f35f3f5b`. Unit suite re-confirmed green on merged
+main (2196 passed + 6 skipped).
+
+### Session 63b — 2026-07-21 — TWO-HOST DIVERGENCE (cubes.glsl still failed in Houdini)
+
+**MERGED to main** (fix `c240ed25`). Owner re-tested cubes.glsl in **real
+Houdini** after the S63 merge and it STILL failed — but only on the two
+top-level lines `mp *= ROT(...)` / `grd.xy *= ROT(...)` (the preproc-block
+errors from S63 were gone). My S63 "already fixed by a prior session" claim was
+true for the campaign host but WRONG for the Houdini host.
+
+**Root cause — the campaign and Houdini use TWO DIFFERENT transpiler hosts,
+and they had diverged:**
+- **Host A** `tests/transpile.py` — the campaign wrapper. What `compilecl.py`,
+  the ledger, `corpus.py`, and every "campaign proof" exercise.
+- **Host B** `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`
+  — the **actual HDA/Houdini deployment** wrapper. What a real cook runs.
+Both wrap the same core `src/glsl_to_opencl`, but each has its own pre/post
+pass sequence. Host A seeds `transformer.user_function_return_types.update(
+preprocessor.matrix_macros)` (so `v *= ROT`, ROT a `#define ...mat2(...)`,
+lowers to `GLSL_mul_vec2_mat2`); **Host B never mirrored that seed**, so it
+emitted a raw `float2 *= matrix2x2` that clang rejects. Category **J**
+(matrix-returning-macro), wrapper-parity flavour.
+
+**Fix:** one line in Host B, mirroring Host A, right after
+`transformer.entry_function = mode`:
+`transformer.user_function_return_types.update(preprocessor.matrix_macros)`.
+
+**Proof (this time through the REAL Houdini path):** built a minimal
+Shadertoy-API JSON wrapping cubes.glsl as a single Image pass and cooked it via
+`hython builder_cook_headless.py <json> Transpile` (env `HSHADERTOY_ROOT` +
+`HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`) → **COOK SUCCESS, exit 0.** Unit
+**2198 passed + 6 skipped** (+2 `test_houdini_transpiler.py::
+TestMatrixMacroParity`). `houdini_smoke.py` + `rc.py smoke` exit 0
+(render-compare FAIL:10/PASS:8 unchanged ⇒ no render regression). The campaign
+corpus is UNAFFECTED (it measures via Host A) so no corpus re-test applies.
+
+**LESSON (campaign-critical, see NEXT_SESSION "TWO-HOST" note):** a fix that
+lives in a HOST WRAPPER pass (not the shared core) only reaches Houdini if it is
+mirrored into BOTH `tests/transpile.py` AND `transpile_glsl.py`. `compilecl.py`
+proves Host A only; the ONLY gate that exercises Host B is a real Houdini cook
+(`houdini_smoke.py` / `rc.py smoke` / a per-shader `builder_cook_headless.py`).
+When a shader "compiles in the campaign but fails in Houdini", suspect Host
+A/B drift FIRST. Files: `transpile_glsl.py`, `test_houdini_transpiler.py` (+2).
+Commit `c240ed25`.
+
+### Session 63c — 2026-07-21 — Host A/B parity audit + S59-rescue port
+
+After the S63b matrix_macros fix, owner asked to audit for OTHER Host A/B
+divergences before documenting. Full pass-by-pass compare of `tests/transpile.py`
+(Host A) vs `houdini/.../transpile_glsl.py` (Host B):
+
+- **matrix_macros seed** — was missing in B → fixed S63b (`c240ed25`).
+- **S59 entry-trapped-in-`#ifdef` rescue** (`strip_conditionals` +
+  `_entry_trapped_in_conditional`) — **was missing in B**: a shader whose only
+  `mainImage` is trapped in a program-scope `#ifdef`/`#ifndef` emitted an EMPTY
+  @KERNEL body in Houdini (renders nothing) while transpiling fine in the
+  campaign. **Ported to B** (`946a2790`), mirroring A; zero blast radius (only
+  reached after partition finds no entry). Proven: entry-in-`#ifdef` shader now
+  COOKS clean in real Houdini. Unit +2 (`TestEntryTrappedInConditional`).
+- **normalize_entry_point** — parity except a benign early-return guard (B also
+  matches `mainCubemap`/`mainSound`; A only `mainImage`). Harmless — left as-is.
+- **post_process_ifdef_blocks** — BYTE-IDENTICAL between hosts.
+- **AG uniform-redefine push-pop**, **category-A hoisted-global-init prepend** —
+  both present, same shared `src/` helpers.
+- **Common-tab merge** — Host-A-only BY DESIGN (Houdini injects Common as its
+  own renderpass via the builder), not a divergence.
+
+Result: **the two hosts are now at parity.** Unit **2200 passed + 6 skipped**;
+`houdini_smoke` + `rc.py smoke` exit 0. Documented the two-host model + the
+must-mirror checklist + the "campaign only tests Host A" gate gotcha in
+`.claude/skills/transpiler-dev/SKILL.md`, `.claude/skills/houdini-testing/
+SKILL.md`, and `tests/fixcampaign/README.md`. Commits `c240ed25`, `946a2790`,
++ docs.

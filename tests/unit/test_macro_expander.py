@@ -44,11 +44,33 @@ def test_simple_function_macro_expands():
 
 
 def test_define_line_preserved_for_opencl():
-    # the #define is kept (OpenCL may still need it for uses inside object-like
-    # macro bodies that we don't expand); only the call site is expanded inline.
+    # a top-level function-macro #define is KEPT (not mid-statement): the
+    # scalar-ctor-in-#define pass still needs it, OpenCL re-expands it; the call
+    # site is expanded inline too.
     src = "#define SQ(x) ((x)*(x))\nfloat y = SQ(a);"
     out = expand_function_macros(src)
     assert "#define SQ(x)" in out
+    assert "((a)*(a))" in _norm(out).replace(" ", "")
+
+
+def test_function_define_dropped_when_mid_statement():
+    # a function-macro (re)defined BETWEEN the sub-expressions of one statement
+    # (ldfXzB) must be dropped — tree-sitter cannot parse a directive there. The
+    # define at a statement boundary (after `;`) is still kept.
+    src = (
+        "#define KEEP(x) k(x)\n"           # top-level -> kept
+        "float r = KEEP(1);\n"
+        "bool ok = true\n"
+        "#define MID(x) && q(x)\n"         # mid-expression (after `true`) -> dropped
+        "MID(a) MID(b)\n"
+        ";\n"
+    )
+    out = expand_function_macros(src)
+    assert "#define KEEP(x)" in out
+    assert "#define MID(x)" not in out
+    n = _norm(_code(out))
+    assert "true && q(a) && q(b)" in n
+    assert out.count("\n") == src.count("\n")
 
 
 def test_object_like_macro_untouched():
@@ -280,6 +302,140 @@ def test_multiline_define_continuation():
 
 
 # ---------------------------------------------------------------------------
+# Object-like macro that WRAPS function-like macro calls (Session 62, ldfXzB)
+# — the object macro is expanded at its use site so the wrapped function-macro
+#   calls become ordinary code; a plain object macro (PI) is still left alone.
+# ---------------------------------------------------------------------------
+
+def test_object_macro_wrapping_function_macro_expands():
+    src = (
+        "#define PRIM(x) && f(x)\n"
+        "#define LIST PRIM(a) PRIM(b) PRIM(c)\n"
+        "bool ok = true LIST ;\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    assert "LIST" not in n and "PRIM(" not in n
+    assert "true && f(a) && f(b) && f(c)" in n
+
+
+def test_object_wrapping_macro_uses_current_undef_redefine():
+    # PRIM is redefined between two uses of the same wrapping object macro; each
+    # use must expand with the PRIM definition live at that point (real cpp order).
+    src = (
+        "#define LIST PRIM(a) PRIM(b)\n"
+        "#define PRIM(x) && sphere(x)\n"
+        "r = true LIST ;\n"
+        "#undef PRIM\n"
+        "#define PRIM(x) && box(x)\n"
+        "s = true LIST ;\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    assert "r = true && sphere(a) && sphere(b)" in n
+    assert "s = true && box(a) && box(b)" in n
+
+
+def test_nested_wrapping_object_macros():
+    # one wrapping object macro references another (SPHEREPRIMLISTWITHLIGHTS shape)
+    src = (
+        "#define PRIM(x) && f(x)\n"
+        "#define BASE PRIM(a) PRIM(b)\n"
+        "#define ALL BASE PRIM(c)\n"
+        "bool ok = true ALL ;\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    assert "true && f(a) && f(b) && f(c)" in n
+
+
+def test_plain_object_macro_still_untouched_with_wrapping_enabled():
+    # a wrapping object macro coexists with a plain one; only the wrapper expands
+    src = (
+        "#define PI 3.14159\n"
+        "#define PRIM(x) g(x)\n"
+        "#define LIST PRIM(a)\n"
+        "float y = PI; bool z = LIST ;\n"
+    )
+    out = expand_function_macros(src)
+    assert "#define PI 3.14159" in out
+    assert "PI" in _norm(_code(out))
+    assert "g(a)" in _norm(_code(out))
+
+
+# ---------------------------------------------------------------------------
+# Multi-line macro CALL sites (Session 62, ldfyRn) — a call whose argument list
+# spans several physical lines with NO backslash continuation.
+# ---------------------------------------------------------------------------
+
+def test_multiline_call_site_no_backslash():
+    src = (
+        "#define P(cmd) d = 0.; cmd ; draw(d);\n"
+        "#define S(a,b) step(a,b)\n"
+        "x = 1.;\n"
+        "P( S(1.,2.)\n"
+        "   S(3.,4.)\n"
+        "   S(5.,6.) )\n"
+        "y = 2.;\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    assert "P(" not in n and "S(" not in n
+    assert "d = 0." in n and "step(1.,2.)" in n and "step(5.,6.)" in n
+    assert "draw(d)" in n
+
+
+def test_multiline_call_preserves_line_count():
+    src = (
+        "#define P(cmd) start cmd end\n"
+        "A( just_a_call )\n"          # unrelated line to keep numbering honest
+        "P( a\n"
+        "   b\n"
+        "   c )\n"
+        "Z\n"
+    )
+    out = expand_function_macros(src)
+    assert out.count("\n") == src.count("\n")
+
+
+# ---------------------------------------------------------------------------
+# Comments hide #define directives (Session 62, 3t2XzW) — a #define inside a
+# block comment must NOT be registered, so a real function definition whose name
+# collides with the commented-out macro is NOT mangled.
+# ---------------------------------------------------------------------------
+
+def test_commented_out_define_not_registered():
+    src = (
+        "/*\n"
+        "#define foo(a,b) bar(a,b)\n"
+        "*/\n"
+        "float foo(float a, float b) { return a + b; }\n"
+        "#define G(x) foo(x, 1.)\n"
+        "y = G(k);\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    # the real function definition survives verbatim (not expanded as a macro)
+    assert "float foo(float a, float b)" in n
+    assert "bar(" not in n
+    # the genuine function macro still expands
+    assert "foo(k, 1.)" in n
+
+
+def test_block_comment_on_one_line_closes_inline():
+    # `/**/` closes the comment opened earlier on the same construct
+    src = (
+        "/* commented\n"
+        "#define M(a) mangle(a) /**/\n"
+        "float M(float a) { return a; }\n"
+    )
+    out = expand_function_macros(src)
+    n = _norm(_code(out))
+    assert "float M(float a)" in n
+    assert "mangle(" not in n
+
+
+# ---------------------------------------------------------------------------
 # Gating: expansion is a fallback — a shader that already parses is untouched
 # ---------------------------------------------------------------------------
 
@@ -301,4 +457,42 @@ def test_gate_expands_when_source_fails_to_parse():
 
 def test_gate_no_macro_returns_unchanged():
     src = "void mainImage(out vec4 o, in vec2 g){ o = vec4(g, 0.0, 1.0); }"
+    assert maybe_expand_function_macros(src) == src
+
+
+# ---------------------------------------------------------------------------
+# Gate extension (Session 62, tlsSDs/4djfDR): a source that PARSES but defines
+# an entry point ONLY as a macro (no real `void mainImage` outside comments)
+# still needs expansion — such a shader can never transpile as-is ("Could not
+# find mainImage"), so firing on it cannot regress a passing shader.
+# ---------------------------------------------------------------------------
+
+def test_gate_fires_on_entry_macro_without_real_entry():
+    # a single spliced #define parses fine, but there is no real mainImage
+    src = "#define mainImage(z,u) z = vec4(u, 0., 1.)\n"
+    out = maybe_expand_function_macros(src)
+    assert out != src
+    assert "void mainImage(out vec4 z, in vec2 u)" in _norm(out)
+
+
+def test_gate_fires_when_real_entry_only_in_comments():
+    # 4djfDR shape: the real definitions are all commented out
+    src = (
+        "#define mainImage(C,U) C = vec4(U, 0., 1.)\n"
+        "/*\n"
+        "void mainImage( out vec4 C, vec2 U )\n"
+        "{ C = vec4(0); }\n"
+        "*/\n"
+    )
+    out = maybe_expand_function_macros(src)
+    assert "void mainImage(out vec4 C, in vec2 U)" in _norm(out)
+    assert "{ C = vec4(0); }" not in out  # commented-out body stays dead
+
+
+def test_gate_skips_entry_macro_with_real_entry_present():
+    # a real mainImage exists -> current behavior is kept (source untouched)
+    src = (
+        "#define mainImage(o,u) helper(o,u)\n"
+        "void mainImage(out vec4 o, in vec2 u) { o = vec4(u, 0., 1.); }\n"
+    )
     assert maybe_expand_function_macros(src) == src

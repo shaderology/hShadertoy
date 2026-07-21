@@ -32,6 +32,7 @@ from src.glsl_to_opencl.preprocessor import (
     collect_uniform_redefines,
     uniform_redefine_prefix,
 )
+from src.glsl_to_opencl.preprocessor.conditional_eval import strip_conditionals
 
 # Shadertoy renderpass entry points. A pass's own entry is split out for the
 # @KERNEL body; the OTHER entries are excluded when they appear after it
@@ -156,6 +157,26 @@ def _partition_translation_unit(ir, entry_name):
         header_declarations.append(decl)
 
     return entry_ir, header_declarations
+
+
+# A `void mainImage(` definition sitting inside an un-evaluated program-scope
+# conditional blob (see _entry_trapped_in_conditional). Permissive by design —
+# it only gates a rescue attempt that is re-checked by re-partitioning.
+# Mirror of Host A (tests/transpile.py).
+_TRAPPED_ENTRY_RE = re.compile(r'\bvoid\s+mainImage\s*\(')
+
+
+def _entry_trapped_in_conditional(ir) -> bool:
+    """True when a mainImage definition is hidden inside a raw preprocessor
+    blob — a program-scope `#ifdef`/`#ifndef` that tree-sitter kept verbatim
+    (so the entry never became a top-level FunctionDefinition and partition
+    found no entry). Comment-safe: a block-commented mainImage is a separate
+    Comment node, never a PreprocessorDirective. Mirror of Host A (S59)."""
+    for decl in ir.declarations:
+        if (isinstance(decl, IR.PreprocessorDirective)
+                and _TRAPPED_ENTRY_RE.search(decl.text or "")):
+            return True
+    return False
 
 
 def _entry_param_names(entry_ir):
@@ -330,6 +351,13 @@ def transpile(glsl_source: str, mode: str = None) -> str:
         # @KERNEL local, not a deref'able pointer (see
         # ASTTransformer.entry_function / entry_params_are_locals).
         transformer.entry_function = mode
+        # Seed matrix-returning #define macros (category J) as user-function
+        # return types so `p *= rot(a)` (rot a matrix macro) dispatches through
+        # the matmul helper instead of emitting a raw `float2 *= matrix2x2`.
+        # A later real definition of the same name overwrites this during
+        # transform. Mirror of Host A (tests/transpile.py) — without this the
+        # Houdini host left top-level `v *= ROT(...)` raw (shadertoy mslfR2).
+        transformer.user_function_return_types.update(preprocessor.matrix_macros)
         ir = transformer.transform(ast)
 
         # Category A — program-scope globals with non-constant initializers
@@ -346,6 +374,31 @@ def transpile(glsl_source: str, mode: str = None) -> str:
 
         # Stage 5: Split entry vs header on IR and emit each.
         entry_ir, header_decls = _partition_translation_unit(ir, mode)
+
+        # S59 rescue (mirror of Host A) — the entry may be trapped inside a
+        # program-scope #ifdef/#ifndef that tree-sitter kept as one opaque raw
+        # blob, so the entry never became a top-level FunctionDefinition and
+        # partition found none. If a raw preprocessor blob holds a mainImage
+        # definition and the guarding conditional is statically decidable,
+        # evaluate it (strip_conditionals) on the pre-preprocessor source and
+        # rebuild the IR once. Only reached AFTER a failed partition, so
+        # shaders that transpile today are untouched (zero blast radius).
+        # Without this, entry-in-#ifdef shaders emit an EMPTY @KERNEL body in
+        # Houdini (they transpile fine in the campaign host, which has it).
+        if entry_ir is None and _entry_trapped_in_conditional(ir):
+            stripped = strip_conditionals(glsl_source)
+            if stripped.balanced and stripped.source != glsl_source:
+                preprocessor = PreprocessorTransformer()
+                glsl_processed = preprocessor.transform(stripped.source)
+                ast = parser.parse(glsl_processed)
+                transformer = ASTTransformer(
+                    TypeChecker(create_builtin_symbol_table()))
+                transformer.entry_function = mode
+                transformer.user_function_return_types.update(
+                    preprocessor.matrix_macros)
+                ir = transformer.transform(ast)
+                hoisted_global_inits = list(transformer.hoisted_global_inits)
+                entry_ir, header_decls = _partition_translation_unit(ir, mode)
 
         header_opencl = ""
         ag_redefines = {}

@@ -95,6 +95,24 @@ python tests/fixcampaign/corpus.py delta
    Renders gradient+london+digits through wgpu-shadertoy AND the HDA and
    gates on perceptual similarity. Exit 0 required, same regression rule.
    Budget ~2-4 min. Docs: `tests/rendercompare/README.md`.
+
+   > ⚠ **TWO transpiler hosts — the campaign only tests one.** Steps 6-7
+   > (`campaign.py test`, `compilecl.py`) run **Host A** `tests/transpile.py`.
+   > The shipping Houdini path is **Host B**
+   > `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`, a
+   > drifting near-duplicate. The ONLY steps that exercise Host B are the real
+   > cooks in step 8 (`houdini_smoke.py` / `rc.py smoke`, or a per-shader
+   > `hython builder_cook_headless.py <api.json> Transpile`). **So a fix can be
+   > green in the corpus yet crash in Houdini from pure host drift** (S63b:
+   > `mp *= ROT(...)` compiled in the campaign but emitted a raw
+   > `float2 *= matrix2x2` in Houdini). If your fix lives in a host WRAPPER pass
+   > (pre/post-processing, not the shared `src/` core) you MUST mirror it into
+   > BOTH hosts and prove it with a real cook — the must-mirror checklist is in
+   > the transpiler-dev skill ("campaign only exercises Host A" box). To cook an
+   > arbitrary shader: wrap its GLSL in an API JSON
+   > (`{"Shader":{"info":{...},"renderpass":[{"code":<glsl>,"type":"image","name":"Image","inputs":[],"outputs":[{"channel":0}]}]}}`)
+   > and run `builder_cook_headless.py` with `HSHADERTOY_ROOT` +
+   > `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`.
 9. **Record**: append a dated entry to `PROGRESS.md` (what changed, files,
    tests added, unit-suite result, delta: fixed/regressed/net, any unmasked
    categories, commit hash). Update the item's status in `BACKLOG.md`.

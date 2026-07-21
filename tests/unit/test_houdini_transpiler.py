@@ -288,6 +288,82 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         assert "if" in result
 
 
+class TestMatrixMacroParity:
+    """The Houdini host must mirror the campaign host (tests/transpile.py) in
+    seeding matrix-returning #define macros (category J) as user-function
+    return types, so `v *= ROT(...)` — where ROT is `#define ROT(a) mat2(...)`
+    — lowers to the GLSL_mul matmul helper instead of emitting a raw
+    `float2 *= matrix2x2` (which OpenCL rejects). Regression: shadertoy
+    mslfR2 "cubes" (tests/shaders/complex/cubes.glsl)."""
+
+    def test_vec_compound_assign_matrix_macro_lowers(self):
+        glsl = (
+            "#define ROT(a) mat2(cos(a), sin(a), -sin(a), cos(a))\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    vec2 mp = fragCoord;\n"
+            "    mp *= ROT(0.5);\n"
+            "    fragColor = vec4(mp, 0.0, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        assert "GLSL_mul" in result
+        # The raw compound-assign against a matrix must NOT survive.
+        assert "mp *= ROT" not in result
+
+    def test_swizzle_compound_assign_matrix_macro_lowers(self):
+        glsl = (
+            "#define ROT(a) mat2(cos(a), sin(a), -sin(a), cos(a))\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    vec3 grd = vec3(fragCoord, 1.0);\n"
+            "    grd.xy *= ROT(0.025);\n"
+            "    fragColor = vec4(grd, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl)
+        assert "GLSL_mul" in result
+        assert "grd.xy *= ROT" not in result
+
+
+class TestEntryTrappedInConditional:
+    """Host A/B parity (S59): when the ONLY mainImage definition is trapped in
+    a program-scope #ifdef/#ifndef (tree-sitter keeps it as one opaque raw
+    blob so partition finds no top-level entry), the host must evaluate the
+    constant conditional and rebuild the IR — otherwise the Houdini @KERNEL
+    body comes out EMPTY and the shader renders nothing. Host A
+    (tests/transpile.py) already did this; Host B must mirror it."""
+
+    def test_mainimage_in_ifdef_produces_kernel_body(self):
+        glsl = (
+            "#define SIMPLE_VERSION\n"
+            "#ifdef SIMPLE_VERSION\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
+            "}\n"
+            "#else\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(0.0);\n"
+            "}\n"
+            "#endif\n"
+        )
+        result = transpile(glsl, mode="mainImage")
+        # The @KERNEL body must contain the selected branch's assignment, not
+        # be an empty shell.
+        kernel_region = result[result.find("@KERNEL"):]
+        assert "1.0f, 0.0f, 0.0f, 1.0f" in kernel_region
+
+    def test_mainimage_in_ifndef_produces_kernel_body(self):
+        glsl = (
+            "#ifndef CFG_OFF\n"
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(0.5, 0.25, 0.125, 1.0);\n"
+            "}\n"
+            "#endif\n"
+        )
+        result = transpile(glsl, mode="mainImage")
+        kernel_region = result[result.find("@KERNEL"):]
+        assert "0.5f, 0.25f, 0.125f, 1.0f" in kernel_region
+
+
 if __name__ == "__main__":
     # Allow running tests directly with: hython tests/unit/test_houdini_transpiler.py
     pytest.main([__file__, "-v"])

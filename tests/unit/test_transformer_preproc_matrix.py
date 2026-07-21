@@ -248,3 +248,95 @@ def test_define_matrix_returning_macro_body_unchanged():
     assert "#define rot(a) GLSL_mat2(" in combined
     # The AST use-site still lowers via matrix_macros seeding.
     assert "GLSL_mul" in combined
+
+
+# ============================================================================
+# Part 3 — PROGRAM-SCOPE #if/#elif blocks that wrap whole FUNCTION DEFINITIONS
+# (Session 63) — the case S53 deferred ("program-scope blocks keep the raw
+# path"). A `#if DFx / #elif DFy` chain selecting one of several definitions of
+# the same helper is a common Shadertoy idiom (e.g. mslfR2 "cubes"). Its bodies
+# must be AST-routed just like statement-level blocks so out/inout params,
+# matrix `*=`, and vec ctors lower correctly. Entry-point definitions inside a
+# conditional stay on the raw path (S59 owns that flow).
+# ============================================================================
+
+_CUBES_HELPERS = (
+    "mat3 g_rot = mat3(1.0);\n"
+    "float torus(vec3 p, vec2 t){ return length(p)-t.x; }\n"
+)
+
+
+def test_program_scope_ifelif_function_out_param_routed():
+    """mslfR2 shape: an out-param helper defined inside a program-scope
+    #if/#elif chain must strip out -> pointer (not leak `out` into OpenCL)."""
+    header, kernel = tp(
+        "#define DF2\n"
+        + _CUBES_HELPERS
+        + "#if defined(DF1)\n"
+        "float dfeffect(vec3 p, out float ogd) { ogd = 1.0; return p.x; }\n"
+        "#elif defined(DF2)\n"
+        "float dfeffect(vec3 p, out float ogd) {\n"
+        "  vec3 p1 = p;\n"
+        "  p1 *= g_rot;\n"
+        "  float d1 = torus(p1, 10.0*vec2(1.0, 0.0125));\n"
+        "  ogd = d1;\n"
+        "  return d1;\n"
+        "}\n"
+        "#endif\n"
+        + wrap_main(
+            "  float g;\n"
+            "  float d = dfeffect(vec3(fragCoord, 0.0), g);\n"
+        )
+    )
+    combined = header + kernel
+    # Directives preserved so the OpenCL preprocessor still picks one branch.
+    assert "#if defined(DF1)" in combined
+    assert "#elif defined(DF2)" in combined
+    # out-param lowered to a pointer in BOTH the definition and the call site.
+    assert "out float ogd" not in combined
+    assert "float* ogd" in combined or "float *ogd" in combined
+    assert "*ogd = d1" in combined
+    # matrix compound-assign lowered.
+    assert "p1 *= g_rot" not in combined
+    assert "GLSL_mul" in combined
+    # vec2 ctor lowered (no bare GLSL `vec2(` survives).
+    assert "vec2(1.0" not in combined
+
+
+def test_program_scope_ifelif_call_site_gets_address_of():
+    """The top-level caller of a conditionally-defined out-param helper must
+    pass the argument by address."""
+    header, kernel = tp(
+        "#define DF2\n"
+        + _CUBES_HELPERS
+        + "#if defined(DF1)\n"
+        "float dfeffect(vec3 p, out float ogd) { ogd = 1.0; return p.x; }\n"
+        "#elif defined(DF2)\n"
+        "float dfeffect(vec3 p, out float ogd) { ogd = p.y; return p.x; }\n"
+        "#endif\n"
+        "float df(vec3 p){ float gd; float d = dfeffect(p, gd); return d + gd; }\n"
+        + wrap_main("  float d = df(vec3(fragCoord, 0.0));\n")
+    )
+    combined = header + kernel
+    assert "dfeffect(p, &gd)" in combined
+
+
+def test_program_scope_ifdef_entry_point_stays_raw():
+    """Regression guard for S59: an entry point trapped in a program-scope
+    conditional must NOT be routed into a PreprocessorBlock (that flow is owned
+    by transpile.py `_entry_trapped_in_conditional`). It must still transpile."""
+    header, kernel = tp(
+        "#define SIMPLE\n"
+        "#ifdef SIMPLE\n"
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        "  fragColor = vec4(fragCoord, 0.0, 1.0);\n"
+        "}\n"
+        "#else\n"
+        "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+        "  fragColor = vec4(0.0);\n"
+        "}\n"
+        "#endif\n"
+    )
+    combined = header + kernel
+    # Entry point resolved (S59 path) — SOME mainImage/kernel body emitted.
+    assert "fragColor" in combined

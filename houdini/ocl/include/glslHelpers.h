@@ -272,5 +272,139 @@ __GLSL_OVER float2  GLSL_fwidth(float2 a){ return a; }
 __GLSL_OVER float3  GLSL_fwidth(float3 a){ return a; }
 __GLSL_OVER float4  GLSL_fwidth(float4 a){ return a; }
 
+// ---------- Category N: single-argument constructor dispatchers ----------
+// GLSL_vecN/ivecN/uvecN/bvecN(x) and GLSL_float/int/uint/bool(x) are emitted
+// by the transpiler for a single-arg GLSL constructor whose argument type it
+// cannot statically infer (macro parameters/results, textureSize, untyped
+// array elements). OpenCL overload resolution supplies the type info the
+// transpiler lacks — same precedent as GLSL_mul / GLSL_matN in matrix_ops.h.
+//
+// Semantics mirror the AST-path lowering (_transform_vector_conversion_ctor):
+//   same width         -> convert_<T>N(v)          (identity convert is legal)
+//   wider source       -> swizzle-truncate first   (GLSL vec2(v4) == v4.xy)
+//   scalar             -> broadcast; exactly ONE element-typed scalar overload
+//                         per target (other scalar types arrive via C implicit
+//                         conversion — a second scalar overload would be
+//                         ambiguous)
+//   scalar-from-vector -> .x  (GLSL float(v4) == float(v4.x))
+//   bvec targets       -> GLSL truth semantics: nonzero => true, represented
+//                         as the transpiler's canonical 1-for-true int vector
+//                         (OpenCL relationals give -1; & 1 normalizes)
+// GLSL never widens through a single-arg ctor (vec4(vec2) is illegal), so no
+// narrower-source overloads exist.
+
+#define DEFINE_CTOR_W2(NAME, ET, DST, CONVERT) \
+  __GLSL_OVER DST NAME(ET     s){ return (DST)(s); } \
+  __GLSL_OVER DST NAME(float2 v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(float3 v){ return CONVERT(v.xy); } \
+  __GLSL_OVER DST NAME(float4 v){ return CONVERT(v.xy); } \
+  __GLSL_OVER DST NAME(int2   v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(int3   v){ return CONVERT(v.xy); } \
+  __GLSL_OVER DST NAME(int4   v){ return CONVERT(v.xy); } \
+  __GLSL_OVER DST NAME(uint2  v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(uint3  v){ return CONVERT(v.xy); } \
+  __GLSL_OVER DST NAME(uint4  v){ return CONVERT(v.xy); }
+
+#define DEFINE_CTOR_W3(NAME, ET, DST, CONVERT) \
+  __GLSL_OVER DST NAME(ET     s){ return (DST)(s); } \
+  __GLSL_OVER DST NAME(float3 v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(float4 v){ return CONVERT(v.xyz); } \
+  __GLSL_OVER DST NAME(int3   v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(int4   v){ return CONVERT(v.xyz); } \
+  __GLSL_OVER DST NAME(uint3  v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(uint4  v){ return CONVERT(v.xyz); }
+
+#define DEFINE_CTOR_W4(NAME, ET, DST, CONVERT) \
+  __GLSL_OVER DST NAME(ET     s){ return (DST)(s); } \
+  __GLSL_OVER DST NAME(float4 v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(int4   v){ return CONVERT(v); } \
+  __GLSL_OVER DST NAME(uint4  v){ return CONVERT(v); }
+
+DEFINE_CTOR_W2(GLSL_vec2,  float, float2, convert_float2)
+DEFINE_CTOR_W3(GLSL_vec3,  float, float3, convert_float3)
+DEFINE_CTOR_W4(GLSL_vec4,  float, float4, convert_float4)
+DEFINE_CTOR_W2(GLSL_ivec2, int,   int2,   convert_int2)
+DEFINE_CTOR_W3(GLSL_ivec3, int,   int3,   convert_int3)
+DEFINE_CTOR_W4(GLSL_ivec4, int,   int4,   convert_int4)
+DEFINE_CTOR_W2(GLSL_uvec2, uint,  uint2,  convert_uint2)
+DEFINE_CTOR_W3(GLSL_uvec3, uint,  uint3,  convert_uint3)
+DEFINE_CTOR_W4(GLSL_uvec4, uint,  uint4,  convert_uint4)
+
+// bvec targets: nonzero => 1 (int-vector representation). The scalar overload
+// takes float so a fractional scalar keeps its truth value (an int-typed
+// overload would truncate bool(0.5) to false).
+#define DEFINE_BCTOR_W2(NAME) \
+  __GLSL_OVER int2 NAME(float  s){ return (int2)(s != 0.0f); } \
+  __GLSL_OVER int2 NAME(float2 v){ return (v    != (float2)(0.0f)) & 1; } \
+  __GLSL_OVER int2 NAME(float3 v){ return (v.xy != (float2)(0.0f)) & 1; } \
+  __GLSL_OVER int2 NAME(float4 v){ return (v.xy != (float2)(0.0f)) & 1; } \
+  __GLSL_OVER int2 NAME(int2   v){ return (v    != (int2)(0)) & 1; } \
+  __GLSL_OVER int2 NAME(int3   v){ return (v.xy != (int2)(0)) & 1; } \
+  __GLSL_OVER int2 NAME(int4   v){ return (v.xy != (int2)(0)) & 1; } \
+  __GLSL_OVER int2 NAME(uint2  v){ return (v    != (uint2)(0u)) & 1; } \
+  __GLSL_OVER int2 NAME(uint3  v){ return (v.xy != (uint2)(0u)) & 1; } \
+  __GLSL_OVER int2 NAME(uint4  v){ return (v.xy != (uint2)(0u)) & 1; }
+
+#define DEFINE_BCTOR_W3(NAME) \
+  __GLSL_OVER int3 NAME(float  s){ return (int3)(s != 0.0f); } \
+  __GLSL_OVER int3 NAME(float3 v){ return (v     != (float3)(0.0f)) & 1; } \
+  __GLSL_OVER int3 NAME(float4 v){ return (v.xyz != (float3)(0.0f)) & 1; } \
+  __GLSL_OVER int3 NAME(int3   v){ return (v     != (int3)(0)) & 1; } \
+  __GLSL_OVER int3 NAME(int4   v){ return (v.xyz != (int3)(0)) & 1; } \
+  __GLSL_OVER int3 NAME(uint3  v){ return (v     != (uint3)(0u)) & 1; } \
+  __GLSL_OVER int3 NAME(uint4  v){ return (v.xyz != (uint3)(0u)) & 1; }
+
+#define DEFINE_BCTOR_W4(NAME) \
+  __GLSL_OVER int4 NAME(float  s){ return (int4)(s != 0.0f); } \
+  __GLSL_OVER int4 NAME(float4 v){ return (v != (float4)(0.0f)) & 1; } \
+  __GLSL_OVER int4 NAME(int4   v){ return (v != (int4)(0)) & 1; } \
+  __GLSL_OVER int4 NAME(uint4  v){ return (v != (uint4)(0u)) & 1; }
+
+DEFINE_BCTOR_W2(GLSL_bvec2)
+DEFINE_BCTOR_W3(GLSL_bvec3)
+DEFINE_BCTOR_W4(GLSL_bvec4)
+
+// Scalar-from-vector: GLSL float(vecN) takes the FIRST component (== v.x),
+// converting the element base when it differs. The identity overload covers
+// the scalar-argument case (other scalar types implicit-convert to it, which
+// is exactly the GLSL scalar-conversion semantics: float->int truncates
+// toward zero, int->float widens).
+#define DEFINE_SCALAR_CTOR(NAME, ST) \
+  __GLSL_OVER ST NAME(ST     s){ return s; } \
+  __GLSL_OVER ST NAME(float2 v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(float3 v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(float4 v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(int2   v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(int3   v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(int4   v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(uint2  v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(uint3  v){ return (ST)(v.x); } \
+  __GLSL_OVER ST NAME(uint4  v){ return (ST)(v.x); }
+
+DEFINE_SCALAR_CTOR(GLSL_float, float)
+DEFINE_SCALAR_CTOR(GLSL_int,   int)
+DEFINE_SCALAR_CTOR(GLSL_uint,  uint)
+
+// bool(x): nonzero => true. The scalar overload takes float for the same
+// truth-preservation reason as the bvec targets.
+__GLSL_OVER bool GLSL_bool(float  s){ return s != 0.0f; }
+__GLSL_OVER bool GLSL_bool(float2 v){ return v.x != 0.0f; }
+__GLSL_OVER bool GLSL_bool(float3 v){ return v.x != 0.0f; }
+__GLSL_OVER bool GLSL_bool(float4 v){ return v.x != 0.0f; }
+__GLSL_OVER bool GLSL_bool(int2   v){ return v.x != 0; }
+__GLSL_OVER bool GLSL_bool(int3   v){ return v.x != 0; }
+__GLSL_OVER bool GLSL_bool(int4   v){ return v.x != 0; }
+__GLSL_OVER bool GLSL_bool(uint2  v){ return v.x != 0u; }
+__GLSL_OVER bool GLSL_bool(uint3  v){ return v.x != 0u; }
+__GLSL_OVER bool GLSL_bool(uint4  v){ return v.x != 0u; }
+
+#undef DEFINE_CTOR_W2
+#undef DEFINE_CTOR_W3
+#undef DEFINE_CTOR_W4
+#undef DEFINE_BCTOR_W2
+#undef DEFINE_BCTOR_W3
+#undef DEFINE_BCTOR_W4
+#undef DEFINE_SCALAR_CTOR
+
 
 #endif // GLSL_HELPERS_H

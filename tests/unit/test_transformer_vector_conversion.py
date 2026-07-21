@@ -190,8 +190,12 @@ def test_identity_ctor_unchanged(parser, transformer, emitter):
 
 
 def test_unknown_arg_type_unchanged(parser, transformer, emitter):
-    """An identifier with un-inferrable type (e.g. a macro-defined value)
-    must keep the cast (no guess)."""
+    """A BARE identifier with un-inferrable type (e.g. a macro-defined value)
+    must keep the cast: a comma-list object macro (`#define C .5,.9,.95`)
+    expands the cast into a legal component list, but would explode a
+    GLSL_vec2 dispatcher call into a 3-arg call with no overload (Xt23z3).
+    Non-identifier untypeable args (calls, member access) DO route to the
+    dispatcher — see test_transformer_ctor_dispatcher.py."""
     out = t(_fn("vec2 v = vec2(SOME_MACRO_VALUE); return vec4(v, 0.0, 1.0);"),
             parser, transformer, emitter)
     assert 'convert_float2' not in out
