@@ -160,7 +160,8 @@ def _build_renderpass_params(
     rp_token: int | str,
     assets_map: Dict[int, Dict[str, Any]],
     transpiler_func: callable,
-    transpiler_mode: str
+    transpiler_mode: str,
+    common_glsl: str = ""
 ) -> Dict[str, Any]:
     """
     Build HDA parameters for a single renderpass.
@@ -199,8 +200,17 @@ def _build_renderpass_params(
             if transpiler_mode == "Template":
                 code_opencl = transpiler_func(code_glsl, mode=transpiler_mode)
             else:
-                # Production transpiler: let it auto-detect renderpass type (mainImage, Common, etc.)
-                code_opencl = transpiler_func(code_glsl, mode=None)
+                # Production transpiler: let it auto-detect renderpass type
+                # (mainImage, Common, etc.). Pass the Common tab GLSL to
+                # non-Common passes so call sites to Common-defined helpers with
+                # out/inout params take the argument's address (`&x`) — Common
+                # is a separate node, so its signatures are otherwise invisible
+                # to a pass. (shadertoy tsKXR3 "Multiscale MIP Fluid".)
+                if rp_token != "common" and common_glsl:
+                    code_opencl = transpiler_func(
+                        code_glsl, mode=None, common=common_glsl)
+                else:
+                    code_opencl = transpiler_func(code_glsl, mode=None)
         except Exception as e:
             # Provide context about which renderpass failed
             rp_name = renderpass.get("name", "Unknown")
@@ -379,6 +389,16 @@ def build_shadertoy_hda(
     # Here's where we set approximately a billion parameters
     all_params = {}
 
+    # The Common tab defines helper functions shared by every renderpass, but
+    # Houdini transpiles it as a separate node — so a pass never sees Common's
+    # signatures. Extract its GLSL up front and forward it to each pass so call
+    # sites to Common helpers with out/inout params get address-of arguments.
+    common_glsl = ""
+    for renderpass in renderpasses:
+        if _resolve_renderpass_name(renderpass) == "Common":
+            common_glsl = renderpass.get("code", "") or ""
+            break
+
     for renderpass in renderpasses:
         rp_name = _resolve_renderpass_name(renderpass)
         if not rp_name:
@@ -398,7 +418,8 @@ def build_shadertoy_hda(
             rp_token,
             assets_map,
             transpiler_func,
-            mode
+            mode,
+            common_glsl
         )
 
         all_params.update(rp_params)

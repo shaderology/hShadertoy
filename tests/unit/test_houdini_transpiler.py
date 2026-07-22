@@ -364,6 +364,94 @@ class TestEntryTrappedInConditional:
         assert "0.5f, 0.25f, 0.125f, 1.0f" in kernel_region
 
 
+class TestCommonCrossTabSignatures:
+    """Houdini transpiles the Common tab as a SEPARATE node (code_common)
+    injected before @KERNEL, so a renderpass that CALLS a Common-defined helper
+    is transpiled without seeing that helper's definition. When the helper has
+    an out/inout parameter, its call site must still take the argument's address
+    (`&x`) or the emitted `float3* p` parameter is passed a bare `float3` and
+    clang rejects the kernel. Host A (tests/transpile.py --common) merges Common
+    into the pass TU and gets this for free; Host B restores parity by seeding
+    the pass transformer with Common's harvested signatures via `common=`.
+
+    Regression: shadertoy tsKXR3 "Multiscale MIP Fluid" — the Image pass calls
+    `light(uv, BUMP, 0.5, dxy, iTime, avd)` where `light`'s 6th param is
+    `inout vec3 avd`, defined in the Common tab.
+    """
+
+    def test_inout_arg_to_common_helper_gets_address_of(self):
+        common = (
+            "vec3 light(vec2 uv, float b, inout vec3 avd) {\n"
+            "    avd = vec3(b);\n"
+            "    return uv.xyx;\n"
+            "}\n"
+        )
+        image = (
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    vec2 uv = fragCoord / iResolution.xy;\n"
+            "    vec3 avd;\n"
+            "    vec3 ld = light(uv, 3.0, avd);\n"
+            "    fragColor = vec4(ld, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(image, mode="mainImage", common=common)
+        kernel_region = result[result.find("@KERNEL"):]
+        assert "light(uv, 3.0f, &avd)" in kernel_region, (
+            "inout arg to a Common-defined helper must take its address; "
+            f"got: {kernel_region!r}"
+        )
+
+    def test_by_value_arg_to_common_helper_unchanged(self):
+        """A Common helper with no out/inout params must NOT get spurious &."""
+        common = (
+            "float scale(float x, float k) { return x * k; }\n"
+        )
+        image = (
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    float v = 2.0;\n"
+            "    float r = scale(v, 3.0);\n"
+            "    fragColor = vec4(r);\n"
+            "}\n"
+        )
+        result = transpile(image, mode="mainImage", common=common)
+        kernel_region = result[result.find("@KERNEL"):]
+        assert "scale(v, 3.0f)" in kernel_region
+        assert "&v" not in kernel_region
+
+    def test_no_common_is_backward_compatible(self):
+        """Omitting `common` keeps the previous single-arg behavior."""
+        glsl = (
+            "void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+            "    fragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
+            "}\n"
+        )
+        result = transpile(glsl, mode="mainImage")
+        assert "@KERNEL" in result
+
+    def test_common_signature_harvest_helper(self):
+        """The harvest helper reports out/inout param info + return types."""
+        from hshadertoy.transpiler.transpile_glsl import (
+            _harvest_common_signatures,
+        )
+        common = (
+            "vec3 light(vec2 uv, float b, inout vec3 avd) {\n"
+            "    avd = vec3(b); return uv.xyx;\n"
+            "}\n"
+        )
+        sigs, rets = _harvest_common_signatures(common)
+        assert sigs["light"][3] == [
+            ("uv", False), ("b", False), ("avd", True)
+        ]
+        assert rets["light"] == "vec3"
+
+    def test_harvest_on_empty_common(self):
+        from hshadertoy.transpiler.transpile_glsl import (
+            _harvest_common_signatures,
+        )
+        assert _harvest_common_signatures("") == ({}, {})
+        assert _harvest_common_signatures("   ") == ({}, {})
+
+
 if __name__ == "__main__":
     # Allow running tests directly with: hython tests/unit/test_houdini_transpiler.py
     pytest.main([__file__, "-v"])

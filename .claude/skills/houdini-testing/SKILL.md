@@ -25,17 +25,20 @@ main_header → your header → main_kernel → your kernel → closing
 (prepended to the GLSL *before* transpiling — the campaign does this); otherwise
 you get implicit-declaration warnings + ptxas unresolved externs.
 
-> ⚠ **Level 0 proves the CAMPAIGN transpiler, not the Houdini one.**
-> `compilecl.py` compiles output from **Host A** (`tests/transpile.py`). The
-> shipping Houdini path is **Host B**
-> (`houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`), a
-> near-duplicate that has drifted before (S63b — the campaign compiled
-> `mp *= ROT(...)` but Houdini emitted a raw `float2 *= matrix2x2` and crashed
-> the cook). **A green Level 0 does NOT guarantee the shader cooks in
-> Houdini.** Only Level 2 (real cook) runs Host B. When a shader passes the
-> campaign but fails a real cook, suspect Host A/B drift — see the "campaign
-> only exercises Host A" box in the transpiler-dev skill for the must-mirror
-> wrapper checklist.
+> ⚠ **Level 0 proves the CAMPAIGN transpiler's FORMAT, not the Houdini one.**
+> Both hosts now share ONE pipeline (`src/glsl_to_opencl/host_pipeline.py`,
+> unified 2026-07-22), so the semantic transpile is identical — the old Host A/B
+> drift class (S63b `matrix_macros` seed, tsKXR3 Common inout sigs) is gone,
+> guarded by `tests/unit/test_host_parity.py`. What still differs is the OUTPUT
+> FORMAT: `compilecl.py` compiles **Host A** (`tests/transpile.py`) split
+> output; the shipping Houdini path is **Host B**
+> (`houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`), which wraps
+> the same body in `@KERNEL {…}` and resolves the LIVE runtime headers. **A green
+> Level 0 does NOT guarantee the shader cooks in Houdini** — only Level 2 (real
+> cook) exercises the `@KERNEL` format, `main_header.cl`/HDA, and the
+> `#include`d runtime headers. So "campaign PASS but real-cook FAIL" now points
+> at the Houdini formatter / HDA / a runtime header (`glslHelpers.h` …), NOT at
+> pipeline drift.
 
 ### Level 1 — HDA build + transpile, NO cook: `builder_test_headless.py`
 ```bash

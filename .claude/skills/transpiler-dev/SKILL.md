@@ -12,34 +12,45 @@ copy in `docs/transpiler/`); trust code over both.
 
 ## The real pipeline (memorize this)
 
-Parser: **tree-sitter + tree-sitter-glsl** (pip). The package exports nothing —
-two *host scripts* drive it by importing internals:
+Parser: **tree-sitter + tree-sitter-glsl** (pip). The package exports nothing.
+The whole pipeline lives in **ONE** place — `src/glsl_to_opencl/host_pipeline.py`
+(`transpile_pass()`). Two *thin host adapters* import it and differ ONLY in the
+two things that genuinely must differ:
 
 - **Host A** `tests/transpile.py::transpile()` — campaign + dev entry point.
+  Formats split `header`/`kernel`/`full` for `compilecl`; `merge_common=True`
+  (compilecl compiles one file, so Common is string-merged into the pass TU).
 - **Host B** `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`
-  — the shipping Houdini path, a drifted near-duplicate of Host A. **A
-  package fix is not shipped until Host B has it too** — check both.
+  — the shipping Houdini path. Formats the Houdini `@KERNEL {…}` wrapper;
+  `merge_common=False` (Houdini injects Common as its own `code_common`
+  renderpass, so the pipeline only *harvests* Common's inout/out signatures so
+  call sites still take `&arg`).
 
-> ⚠ **The campaign only exercises Host A.** `compilecl.py`, the ledger, and
-> every corpus number run through `tests/transpile.py`. The ONLY things that
-> run Host B are a real Houdini cook: `houdini_smoke.py`, `rc.py smoke`, or
-> `hython builder_cook_headless.py <api.json> Transpile`. So a shader can be
-> green in the campaign yet crash in Houdini purely from **host drift** — that
-> was S63b (`mp *= ROT(...)` compiled in the campaign, emitted a raw
-> `float2 *= matrix2x2` in Houdini). When "campaign PASS but Houdini FAIL",
-> suspect Host A/B drift FIRST. **Any fix living in a host WRAPPER pass (not
-> the shared `src/` core) must be added to BOTH files and proved with a real
-> cook.** Known must-mirror wrapper responsibilities (audited to parity
-> 2026-07-21): the `matrix_macros` seed
-> (`transformer.user_function_return_types.update(preprocessor.matrix_macros)`),
-> the S59 entry-trapped-in-`#ifdef` rescue (`strip_conditionals` +
-> `_entry_trapped_in_conditional`), `normalize_entry_point`,
-> `post_process_ifdef_blocks`, the AG uniform-redefine push-pop, and the
-> category-A hoisted-global-init prepend. (Common-tab merge is Host-A-only by
-> design — Houdini injects Common as its own renderpass.)
+> ✅ **The hosts are unified (2026-07-22, `host_pipeline.py`).** Before that they
+> were drifted near-duplicates and a fix landing in one copy but not the other
+> caused every parity bug (S63b `matrix_macros` seed, S59 rescue, category-A
+> hoisting lost in Host B, tsKXR3 Common inout sigs). **There is no longer a
+> "mirror into both hosts" rule — put a semantic pipeline change in
+> `host_pipeline.py` ONCE and both hosts get it.** The only per-host code left
+> is the output formatter and the `merge_common`/`indent` flags.
+>
+> `tests/unit/test_host_parity.py` is the drift guard: it asserts both hosts
+> delegate to the SAME `transpile_pass` object and share the SAME helper objects
+> (a re-forked private copy breaks `is`-identity), plus cross-host inout parity.
+> **If you add a per-host wrapper pass, add a parity assertion there too.**
+>
+> Real cooks still matter, but NOT for pipeline parity — for Houdini *format* /
+> HDA / runtime-header issues the campaign can't see. `compilecl.py`, the
+> ledger, and every corpus number run Host A's *format*; only a real cook
+> (`houdini_smoke.py`, `rc.py smoke`, `hython builder_cook_headless.py
+> <api.json> Transpile`) runs Host B's `@KERNEL` format + the live runtime
+> headers. So "campaign PASS but Houdini FAIL" now points at the Houdini
+> formatter, `main_header.cl`/HDA, or a runtime-header (`glslHelpers.h` …), not
+> at pipeline drift.
 
-Host A flow per shader pass (single-TU entry-point model since 2026-07-08 —
-`docs/handover/ENTRYPOINT_REDESIGN.md`): Common merged by string-concat →
+Shared pipeline flow per shader pass (`transpile_pass`; single-TU entry-point
+model since 2026-07-08 — `docs/handover/ENTRYPOINT_REDESIGN.md`): Common merged
+(Host A) or signature-harvested (Host B) →
 `normalize_entry_point()` rewrites unconventional entries (macro-entry
 `#define main() mainImage(...)`, bare `void main()`+`gl_*`) into a standard
 `mainImage` → `preprocessor/preprocessor_transformer.py` regex-rewrites
@@ -70,11 +81,11 @@ before designing around spec limits, but don't emit `__constant` arrays).
 | New/changed GLSL construct transform | `ast_transformer.py` (dispatch map in `_transform_node`) + IR node in `transformed_ast.py` + emit method |
 | Emission/formatting | `codegen/opencl_emitter.py` **AND mirror in `transformer/code_emitter.py`** — the legacy emitter is dead in production but the unit suite still exercises it (until refactor R4 deletes it) |
 | GLSL→OpenCL type mapping | `type_map` / `TYPE_NAME_MAP` — but beware there are FOUR OpenCL→GLSL name-map copies in `ast_transformer.py` + one in `preprocessor_transformer.py` (R5 will unify) |
-| Builtin function knowledge | **FIVE lists must stay in sync**: `analyzer/builtins.py`, `ast_transformer.py` (~line 1295), `preprocessor_transformer.py` (~line 42), and regex lists in BOTH hosts (R6 will unify) |
-| Anything inside `#define`/`#if` bodies | `preprocessor_transformer.py` regexes + both hosts' `post_process_ifdef_blocks` — the AST never sees this text (read TRANSPILER_REVIEW §2.3 first; category-G territory) |
+| Builtin function knowledge | **FOUR lists must stay in sync**: `analyzer/builtins.py`, `ast_transformer.py` (~line 1295), `preprocessor_transformer.py` (~line 42), and the regex list in `host_pipeline.post_process_ifdef_blocks` (one copy now, shared by both hosts) |
+| Anything inside `#define`/`#if` bodies | `preprocessor_transformer.py` regexes + `host_pipeline.post_process_ifdef_blocks` (shared by both hosts) — the AST never sees this text (read TRANSPILER_REVIEW §2.3 first; category-G territory) |
 | Missing GLSL builtin at runtime | Often no transpiler change: add a helper/overload to `houdini/ocl/include/glslHelpers.h`/`textureHelpers.h` — live in both campaign and Houdini instantly (houdini-testing skill) |
 | Pre-parse source normalization | `parser/glsl_parser.py` `_normalize_array_syntax` region — extend it rather than adding regex elsewhere |
-| Host-level post-processing | `tests/transpile.py` AND `transpile_glsl.py` — mirror or ship a bug |
+| Host-level / pipeline post-processing | `src/glsl_to_opencl/host_pipeline.py` — the ONE shared pipeline; both hosts inherit it. Add a `test_host_parity.py` assertion if you introduce a per-host wrapper. Do NOT re-add logic to `tests/transpile.py` / `transpile_glsl.py` — those are now format-only adapters |
 
 Do NOT put logic in: `analyzer/type_checker.py` checking machinery (dead —
 only `GLSLType`/`TYPE_NAME_MAP`/`.symbol_table` are live), `codegen/
@@ -95,7 +106,10 @@ code_generator.py`, `parser/preprocessor.py`, `analyzer/metadata.py` (all dead).
 4. `python -m pytest tests/unit/ -q` — must be fully green (~1,807+6 skips;
    note `pytest.ini` sets `filterwarnings = error` with Deprecation/
    PendingDeprecation explicitly ignored — so any OTHER stray warning
-   category fails the suite).
+   category fails the suite). **If you touched `host_pipeline.py` or either
+   host adapter, `tests/unit/test_host_parity.py` MUST stay green** — it is the
+   drift guard. A new per-host wrapper pass needs a matching parity assertion
+   there. (`python -m pytest tests/unit/test_host_parity.py -q` to run it alone.)
 5. Prove on real shaders + zero-regression gate → follow
    `.claude/skills/fix-campaign/SKILL.md` (ledger backup, `--force` re-test,
    delta from ledgers).

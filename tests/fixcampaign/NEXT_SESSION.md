@@ -63,21 +63,27 @@ bucket's error logs FIRST, then fix the localized slice. Candidates, in order:
 - **Mty3zh** (ex-Q): AF ctor-overflow `vec2(hashRace(...), gl_FragCoord.xy/
   iResolution.xy)`; precedent = `_truncate_overflow_ctor_args` (S45 family).
 
-## ⚠ TWO TRANSPILER HOSTS — a fix can pass the campaign yet fail in Houdini (S63b)
-There are **two host wrappers** around the shared core `src/glsl_to_opencl`:
-- **Host A** `tests/transpile.py` — what the campaign, `compilecl.py`, the
-  ledger, and every "proof" exercise. Corpus PASS ≠ Houdini PASS.
+## ✅ TWO TRANSPILER HOSTS — now UNIFIED on one pipeline (2026-07-22)
+Both hosts are thin format adapters over **one shared pipeline**
+`src/glsl_to_opencl/host_pipeline.py` (`transpile_pass`):
+- **Host A** `tests/transpile.py` — split `header`/`kernel`/`full` for the
+  campaign / `compilecl.py`; `merge_common=True`.
 - **Host B** `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`
-  — the **real HDA/Houdini deployment** wrapper. Only a real cook runs it.
-They have **diverged before** (S63b: Host B was missing the `matrix_macros`
-seed, so cubes.glsl compiled in the campaign but a raw `float2 *= matrix2x2`
-crashed the real Houdini cook). **Any fix that lives in a host WRAPPER pass
-(pre/post-processing, not the shared transformer/emitter core) MUST be mirrored
-into BOTH files.** When a shader "passes the campaign but fails in Houdini",
-suspect Host A/B drift first. The only Host-B gates are real cooks:
-`houdini_smoke.py`, `rc.py smoke`, or a per-shader
-`hython builder_cook_headless.py <api.json> Transpile` (env `HSHADERTOY_ROOT`
-+ `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`).
+  — the real HDA `@KERNEL` wrapper; `merge_common=False` + Common signature
+  harvest.
+The old drift class (S63b `matrix_macros` seed missing in Host B; tsKXR3 Common
+inout sigs) **cannot recur for a pipeline change** — put the change in
+`host_pipeline.py` ONCE and both hosts inherit it. **Do NOT re-add pipeline
+logic to `tests/transpile.py` or `transpile_glsl.py`** — they are format-only.
+`tests/unit/test_host_parity.py` (runs inside the step-5 unit suite) is the
+drift guard: it asserts both hosts delegate to the SAME `transpile_pass` object
+and share the SAME helper objects, plus cross-host inout parity. If you add a
+per-host wrapper, add a parity assertion there. A real cook (`houdini_smoke.py`,
+`rc.py smoke`, or `hython builder_cook_headless.py <api.json> Transpile`, env
+`HSHADERTOY_ROOT` + `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`) is still required —
+but it now catches Houdini *format* / HDA / runtime-header issues, not drift.
+This refactor was proven behavior-preserving: Host A output byte-identical
+across all 2171 corpus passes; Host B byte-identical on all successful passes.
 
 ## Houdini / environment notes
 - Gates green unpinned on **22.0.368** through S62, with the live header.

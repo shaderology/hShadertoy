@@ -96,20 +96,19 @@ python tests/fixcampaign/corpus.py delta
    gates on perceptual similarity. Exit 0 required, same regression rule.
    Budget ~2-4 min. Docs: `tests/rendercompare/README.md`.
 
-   > ⚠ **TWO transpiler hosts — the campaign only tests one.** Steps 6-7
-   > (`campaign.py test`, `compilecl.py`) run **Host A** `tests/transpile.py`.
-   > The shipping Houdini path is **Host B**
-   > `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py`, a
-   > drifting near-duplicate. The ONLY steps that exercise Host B are the real
-   > cooks in step 8 (`houdini_smoke.py` / `rc.py smoke`, or a per-shader
-   > `hython builder_cook_headless.py <api.json> Transpile`). **So a fix can be
-   > green in the corpus yet crash in Houdini from pure host drift** (S63b:
-   > `mp *= ROT(...)` compiled in the campaign but emitted a raw
-   > `float2 *= matrix2x2` in Houdini). If your fix lives in a host WRAPPER pass
-   > (pre/post-processing, not the shared `src/` core) you MUST mirror it into
-   > BOTH hosts and prove it with a real cook — the must-mirror checklist is in
-   > the transpiler-dev skill ("campaign only exercises Host A" box). To cook an
-   > arbitrary shader: wrap its GLSL in an API JSON
+   > ✅ **The two hosts share ONE pipeline (unified 2026-07-22,
+   > `src/glsl_to_opencl/host_pipeline.py`).** Steps 6-7 (`campaign.py test`,
+   > `compilecl.py`) run **Host A** `tests/transpile.py` (split-output adapter);
+   > the shipping Houdini path is **Host B**
+   > `houdini/scripts/python/hshadertoy/transpiler/transpile_glsl.py` (`@KERNEL`
+   > adapter). Both are thin format wrappers over the same `transpile_pass`, so
+   > the old "fix passes the campaign but crashes Houdini from host drift" class
+   > (S63b `matrix_macros` seed; tsKXR3 Common inout sigs) **cannot recur for a
+   > pipeline change** — put it in `host_pipeline.py` once. `tests/unit/
+   > test_host_parity.py` (part of the step-5 unit suite) guards this: it fails
+   > if a host stops sharing the core. A real cook in step 8 is still required,
+   > but now it catches Houdini *format* / HDA / runtime-header issues, not
+   > pipeline drift. To cook an arbitrary shader: wrap its GLSL in an API JSON
    > (`{"Shader":{"info":{...},"renderpass":[{"code":<glsl>,"type":"image","name":"Image","inputs":[],"outputs":[{"channel":0}]}]}}`)
    > and run `builder_cook_headless.py` with `HSHADERTOY_ROOT` +
    > `HOUDINI_OCL_PATH=<repo>/houdini/ocl;&`.
